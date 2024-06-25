@@ -1,10 +1,10 @@
 from flask import Blueprint, request, jsonify
 import requests
 
-classapi_app = Blueprint('classapi_app', __name__)
+objectapi_app = Blueprint('objectapi_app', __name__)
 
-@classapi_app.route('/listar_classes', methods=['GET'])
-def listar_classes():
+@objectapi_app.route('/listar_objetos', methods=['GET'])
+def listar_objetos_fisicos():
     sparqapi_url = 'http://localhost:5000/sparqapi/query'
 
     sparql_query = """

@@ -3,11 +3,11 @@ import requests, json
 
 sparqapi_app = Blueprint('sparqapi_app', __name__)
 
-def load_config(filename):
+def load_config1(filename):
     with open(filename, 'r') as f:
         return json.load(f)
 
-config = load_config('config.json')
+config = load_config1('config.json')
 
 fuseki_update_url = config.get('fuseki_update_url')
 fuseki_query_url = config.get('fuseki_query_url')

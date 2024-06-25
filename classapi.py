@@ -1,4 +1,9 @@
 from flask import Blueprint, request, jsonify
+
+
+
+# Carregar as configurações do arquivo config.json
+config = load_config()
 import requests
 
 classapi_app = Blueprint('classapi_app', __name__)
