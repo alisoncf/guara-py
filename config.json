@@ -1,0 +1,10 @@
+{
+    "fuseki_update_url": "http://200.137.241.247:8080/fuseki/classes/update",
+    "fuseki_query_url": "http://200.137.241.247:8080/fuseki/classes/sparql",
+    "class_update_url": "http://200.137.241.247:8080/fuseki/dioceseclass/update",
+    "class_query_url": "http://200.137.241.247:8080/fuseki/dioceseclass/sparql",
+    "object_update_url": "http://200.137.241.247:8080/fuseki/dioceseclass/update",
+    "object_query_url": "http://200.137.241.247:8080/fuseki/dioceseclass/sparql",
+    "user_update_url": "http://200.137.241.247:8080/fuseki/usuarios/update",
+    "user_query_url": "http://200.137.241.247:8080/fuseki/usuarios/sparql"
+}
