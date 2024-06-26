@@ -1,10 +1,15 @@
 from flask import Blueprint, request, jsonify
+from config_loader import load_config
+
+
+# Carregar as configurações do arquivo config.json
+config = load_config()
 import requests
 
-objectapi_app = Blueprint('objectapi_app', __name__)
+classapi_app = Blueprint('classapi_app', __name__)
 
-@objectapi_app.route('/listar_objetos', methods=['GET'])
-def listar_objetos_fisicos():
+@classapi_app.route('/listar_classes', methods=['GET'])
+def listar_classes():
     sparqapi_url = 'http://localhost:5000/sparqapi/query'
 
     sparql_query = """

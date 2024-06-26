@@ -1,9 +1,9 @@
 from flask import Flask
 from flask_cors import CORS
 from sparqapi import sparqapi_app
-from classapi import classapi_app
-from objectapi import objectapi_app
-from acesso import acesso_bp
+from blueprints.classapi import classapi_app
+from blueprints.objectapi import objectapi_app
+from blueprints.acesso import acesso_bp
 
 
 
