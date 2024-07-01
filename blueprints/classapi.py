@@ -21,7 +21,7 @@ def listar_classes():
         sparqapi_url = load_config().get('class_query_url')
         print(sparqapi_url);
         sparql_query = get_sparq_class().replace('%keyword%', keyword).replace('%orderby%',orderby)
-        print(sparql_query)
+        
         headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
                    'Accept': 'application/sparql-results+json,*/*;q=0.9',
                    'X-Requested-With':'XMLHttpRequest'}
@@ -53,7 +53,7 @@ def listar_classes():
 def adicionar_classe():
     try:
         data = request.get_json()
-
+        print(data)
         # Validar os campos obrigatórios
         required_fields = ['label', 'comment', 'parentClass']
         for field in required_fields:
@@ -66,6 +66,7 @@ def adicionar_classe():
         class_uri = f'http://200.137.241.247:8080/fuseki/mplclass/{nome_classe}'
         sparqapi_url = load_config().get('class_update_url')  # Ajuste para carregar a URL do endpoint SPARQL
         
+
         # Montagem da query SPARQL de inserção
         sparql_query = f"""
             PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
@@ -82,7 +83,7 @@ def adicionar_classe():
         """
 
         # Exibindo a query SPARQL para depuração
-        print(sparql_query)
+        print('query',sparql_query)
 
         # Preparação dos headers e dados para a requisição POST
         headers = {
