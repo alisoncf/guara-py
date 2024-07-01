@@ -17,4 +17,3 @@ app.register_blueprint(objectapi_app, url_prefix='/objectapi')
 app.register_blueprint(acesso_bp, url_prefix='/acesso')
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
-

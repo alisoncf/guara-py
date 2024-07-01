@@ -33,4 +33,4 @@ WHERE {
     OPTIONAL { ?class rdfs:subClassOf ?subclassof }
     FILTER ((!bound(?description) || (regex(?description, "%keyword%", "i")))
             || (!bound(?label) || (regex(?label, "%keyword%", "i"))))
-}"""
+}ORDER BY asc(?%orderby%)"""
