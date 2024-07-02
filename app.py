@@ -6,7 +6,6 @@ from blueprints.objectapi import objectapi_app
 from blueprints.acesso import acesso_bp
 
 
-
 app = Flask(__name__)
 CORS(app)
 

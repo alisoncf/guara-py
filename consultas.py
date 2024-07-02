@@ -9,6 +9,7 @@ PREFIX cls: <http://200.137.241.247:8080/fuseki/classes#>
 PREFIX dim: <http://200.137.241.247:8080/fuseki/dimensoes#>
 PREFIX owl: <http://www.w3.org/2002/07/owl#> """
 
+
 def get_sparq_obj():
     return get_prefix() + """
 SELECT DISTINCT ?obj  ?titulo ?resumo ?tipo
@@ -21,6 +22,7 @@ WHERE {
             || regex(?titulo, '%keyword%', 'i')
             || regex(?resumo, '%keyword%', 'i'))}
             """
+
 
 def get_sparq_class():
     return get_prefix() + """
