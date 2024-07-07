@@ -1,47 +1,63 @@
 from flask import Blueprint, request, jsonify
-import requests, json
+import requests
+import json
 
-acesso_bp = Blueprint('acesso', __name__)
+acessoapp = Blueprint('acessoapp', __name__)
+
 
 def load_config(filename):
     with open(filename, 'r') as f:
         return json.load(f)
 
+
 config = load_config('config.json')
 
 FUSEKI_URL = config.get('user_update_url')
-FUSEKI_QUERY_URL = 'user_query_url'
+FUSEKI_QUERY_URL = config.get('user_query_url')
+
 
 def execute_sparql_update(query):
     headers = {'Content-Type': 'application/sparql-update'}
     response = requests.post(FUSEKI_URL, data=query, headers=headers)
     return response
 
+
 def execute_sparql_query(query):
     headers = {'Accept': 'application/sparql-results+json'}
-    response = requests.get(FUSEKI_QUERY_URL, params={'query': query}, headers=headers)
+    response = requests.get(FUSEKI_QUERY_URL, params={
+                            'query': query}, headers=headers)
     return response.json()
 
-@acesso_bp.route('/login', methods=['POST'])
+
+@acessoapp.route('/login', methods=['POST'])
 def login():
     data = request.json
-    username = data.get('username')
+    email = data.get('email')
     password = data.get('password')
 
     query = f"""
-    PREFIX : <http://example.org/guara#>
-    SELECT ?s WHERE {{
-        ?s :username "{username}" ;
-           :password "{password}" .
+    PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+    prefix :      <http://guara.ueg.br/ontologias/usuarios#> 
+    SELECT ?s ?permissao ?username WHERE {{
+        ?s foaf:mbox "{email}" ;
+           foaf:password "{password}" .
+           ?s :temPermissao ?permissao.
+           ?s :username ?username
     }}
     """
+    print(query)
     results = execute_sparql_query(query)
-    if results['results']['bindings']:
-        return jsonify({'message': 'Login successful', 'user': username}), 200
-    else:
-        return jsonify({'message': 'Invalid credentials'}), 401
+    user_data = results['results']['bindings'][0]
+    # user_uri = user_data['s']['value']
+    user_permission = user_data['permissao']['value']
+    user_name = user_data['username']['value']
+    return jsonify({'message': 'Login successful',
+                    'user': user_name,
+                    'email': email,
+                    'permissao': user_permission}), 200
 
-@acesso_bp.route('/curadores', methods=['POST'])
+
+@acessoapp.route('/add_user', methods=['POST'])
 def add_curador():
     data = request.json
     username = data.get('username')
