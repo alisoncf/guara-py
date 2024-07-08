@@ -1,7 +1,9 @@
 from flask import Blueprint, request, jsonify
 import requests
 import json
-
+import uuid
+from datetime import datetime, timedelta
+from urllib.parse import urlencode
 acessoapp = Blueprint('acessoapp', __name__)
 
 
@@ -17,8 +19,14 @@ FUSEKI_QUERY_URL = config.get('user_query_url')
 
 
 def execute_sparql_update(query):
-    headers = {'Content-Type': 'application/sparql-update'}
-    response = requests.post(FUSEKI_URL, data=query, headers=headers)
+    headers = {
+        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+        'Accept': 'application/sparql-results+json,*/*;q=0.9',
+        'X-Requested-With': 'XMLHttpRequest'
+    }
+    data_envio = {'update': query}
+    encoded_data = urlencode(data_envio)
+    response = requests.post(FUSEKI_URL, headers=headers, data=encoded_data)
     return response
 
 
@@ -48,13 +56,37 @@ def login():
     print(query)
     results = execute_sparql_query(query)
     user_data = results['results']['bindings'][0]
-    # user_uri = user_data['s']['value']
+    user_uri = user_data['s']['value']
     user_permission = user_data['permissao']['value']
     user_name = user_data['username']['value']
-    return jsonify({'message': 'Login successful',
-                    'user': user_name,
-                    'email': email,
-                    'permissao': user_permission}), 200
+
+    # Gerar token de autenticação
+    token = str(uuid.uuid4())
+    validade = datetime.now() + timedelta(hours=24)  # Token válido por 24 horas
+
+    # Atualizar RDF com token e validade
+    update = f"""
+    PREFIX : <http://guara.ueg.br/ontologia/usuarios#>
+    DELETE {{ <{user_uri}> :token ?old_token ; :validade ?old_validade }}
+    INSERT {{ <{user_uri}> :token "{token}" ; :validade "{validade.isoformat()}"}}
+    WHERE {{
+        OPTIONAL {{ <{user_uri}> :token ?old_token }}
+        OPTIONAL {{ <{user_uri}> :validade ?old_validade }}
+    }}
+    """
+    print(update)
+    response = execute_sparql_update(update)
+    if response.status_code != 200:
+        return jsonify({'message': 'Failed to update token and validade'}), 500
+
+    return jsonify({
+        'message': 'Login successful',
+        'user': user_name,
+        'email': email,
+        'permissao': user_permission,
+        'token': token,
+        'validade': validade.isoformat()
+    }), 200
 
 
 @acessoapp.route('/add_user', methods=['POST'])
