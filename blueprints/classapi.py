@@ -66,7 +66,7 @@ def adicionar_classe():
         nome_classe = data['label'].replace(" ", "_")
 
         prefix_base = load_config().get('prefix_base_class')
-        class_uri = prefix_base+'#'+nome_classe
+        class_uri = prefix_base+nome_classe
 
         sparqapi_url = load_config().get('class_update_url')
         mae = data['subclassof']
