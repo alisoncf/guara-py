@@ -53,35 +53,50 @@ def listar_objetos_fisicos():
 def adicionar_objeto_fisico():
     try:
         data = request.get_json()
-
+        #print(data)
         # Validar os campos obrigatórios
-        required_fields = ['description', 'title',
-                           'content_urls', 'depictions', 'physical_type']
+        required_fields = ['descricao', 'titulo', 'resumo','colecao']
+                
+        
         for field in required_fields:
             if field not in data:
                 return jsonify({"error": "Invalid input", "message": f"Expected JSON with '{field}' field"}), 400
 
         object_id = str(uuid.uuid4())
-
-        objeto_uri = 'http://200.137.241.247:8080/fuseki/objetos/{object_id}'
+        schema = load_config().get('schema_objetos')
+        objeto_uri = f"{schema}/{object_id}"
         sparqapi_url = load_config().get('object_update_url')
 
-        sparql_query = get_prefix + """
-            PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
-            PREFIX dc: <http://purl.org/dc/elements/1.1/>
-            PREFIX foaf: <http://xmlns.com/foaf/0.1/>
-            PREFIX schema: <http://schema.org/>
+        
+        tem_relacao_part = f':temRelacao {", ".join(f"<{relacao}>" for relacao in data["temRelacao"])}' if "temRelacao" in data and data["temRelacao"] else ''
+        associated_media_part = f'schema:associatedMedia {", ".join(f"<{url}>" for url in data["associatedMedia"])}' if "associatedMedia" in data and data["associatedMedia"] else ''
+        colecao_part = f':colecao "{data["colecao"]}"' if "colecao" in data and data["colecao"] else ''
+        tipo_fisico_part = f':tipoFisico {", ".join(f":{tipo}" for tipo in data["tipoFisico"])}' if "tipoFisico" in data and data["tipoFisico"] else ''
 
+        print (tipo_fisico_part)
+        # Montando a lista de partes da query
+        parts = [
+            f'dc:description "{data["descricao"]}"',
+            f'dc:abstract "{data["resumo"]}"',
+            f'dc:title "{data["titulo"]}"',
+            colecao_part,
+            tem_relacao_part,
+            associated_media_part,
+            tipo_fisico_part
+        ]
+
+        # Remover partes vazias (strings vazias ou espaços em branco)
+        parts = [part for part in parts if part.strip()]
+
+        # Construção final da query SPARQL
+        sparql_query = f"""{get_prefix()}
             INSERT DATA {{
                 <{objeto_uri}> rdf:type :ObjetoDigital ;
-                                dc:description "{data['description']}" ;
-                                dc:title "{data['title']}" ;
-                                schema:contentUrl {", ".join(f'<{url}>' for url in data['content_urls'])} ;
-                                foaf:depiction {", ".join(f'<{url}>' for url in data['depictions'])} ;
-                                :tipoFisico :{data['physical_type']} .
+                                { ' ;\n'.join(parts) } .
             }}
         """
-        print(sparql_query)
+
+        print('->', sparql_query)  # Debugging
         # Enviar a query SPARQL para o endpoint de atualização
         headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
                    'Accept': 'application/sparql-results+json,*/*;q=0.9',
@@ -95,13 +110,14 @@ def adicionar_objeto_fisico():
         if response.status_code == 200:
             return jsonify({"message": "Objeto digital adicionado com sucesso", "id": object_id}), 200
         else:
-            return jsonify({"error": response.status_code, "message": response.text}), response.status_code
+            print (response.text)
+            return jsonify({"error1": response.status_code, "message": response.text}), response.status_code
 
     except requests.exceptions.RequestException as e:
-        return jsonify({"error": "RequestException", "message": str(e)}), 500
+        return jsonify({"error2": "RequestException", "message": str(e)}), 500
 
     except KeyError as e:
-        return jsonify({"error": "KeyError", "message": str(e)}), 400
+        return jsonify({"error3": "KeyError", "message": str(e)}), 400
 
     except Exception as e:
-        return jsonify({"error": "Exception", "message": str(e)}), 500
+        return jsonify({"error4": "Exception", "message": str(e)}), 500

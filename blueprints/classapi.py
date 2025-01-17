@@ -12,29 +12,31 @@ def listar_classes():
     try:
         data = request.get_json()
         if 'keyword' not in data:
-            return jsonify({"error": "Invalid input", "message": "Expected JSON with 'keyword' field"}), 400
+            return jsonify({"error": 'Invalid input', "message": "Expected JSON with 'keyword' field"}), 400
         if 'orderby' not in data:
             orderby = "class"
         else:
             orderby = data['orderby']
 
         keyword = data['keyword']
-        sparqapi_url = load_config().get('class_query_url')
+        repo = data['repository']
+        #sparqapi_url = load_config().get('class_query_url')
+        sparqapi_url = repo
 
         sparql_query = get_sparq_class().replace(
             '%keyword%', keyword).replace('%orderby%', orderby)
-
-        headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-                   'Accept': 'application/sparql-results+json,*/*;q=0.9',
+        print(sparql_query)
+        headers = {'Content-Type': "application/x-www-form-urlencoded; charset=UTF-8",
+                   'Accept': "application/sparql-results+json,*/*;q=0.9",
                    'X-Requested-With': 'XMLHttpRequest'}
         data = {'query': sparql_query}
         encoded_data = urlencode(data)
 
         response = requests.post(
             sparqapi_url, headers=headers, data=encoded_data)
-
         if response.status_code == 200:
             result = response.json()
+            
             return jsonify(result)
         else:
             return jsonify({"error": response.status_code, "message": response.text}), response.status_code
@@ -90,7 +92,7 @@ def adicionar_classe():
         # Preparação dos headers e dados para a requisição POST
         headers = {
             'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-            'Accept': 'application/sparql-results+json,*/*;q=0.9',
+            'Accept': "application/sparql-results+json,*/*;q=0.9",
             'X-Requested-With': 'XMLHttpRequest'
         }
         data_envio = {'update': sparql_query}
@@ -185,7 +187,7 @@ def verificar_existencia_classe(class_uri):
         PREFIX cmgc: <http://www.guara.ueg.br/ontologias/v1/cmgclass#>
         PREFIX : <http://200.137.241.247:8080/fuseki/mplclass#>
         ASK {{
-            ?s rdfs:subClassOf <class_uri> .
+            ?s rdfs:subClassOf <{class_uri}> .
         }}
     """
 

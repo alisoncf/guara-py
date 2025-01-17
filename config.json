@@ -7,6 +7,13 @@
     "object_query_url": "http://200.137.241.247:8080/fuseki/mplobj/query",
     "user_update_url": "http://200.137.241.247:8080/fuseki/usuarios/update",
     "user_query_url": "http://200.137.241.247:8080/fuseki/usuarios/query",
+    "repo_update_url": "http://200.137.241.247:8080/fuseki/repositoriosamigos/update",
+    "repo_query_url": "http://200.137.241.247:8080/fuseki/repositoriosamigos/query",
     "prefix_base_class": "http://guara.ueg.br/ontologias/v1/mplclass#",
-    "prefix_base_obj": "http://guara.ueg.br/ontologias/v1/mplobj#"
+    "prefix_base_obj": "http://guara.ueg.br/ontologias/v1/mplobj#",
+    "prefix_base_repo": "http://guara.ueg.br/ontologias/v1/repositoriosamigos#",
+    "schema_objetos": ":/object",
+    "schema_acervo": ":/collection",
+    "update": "/update",
+    "query": "/query"
 }
