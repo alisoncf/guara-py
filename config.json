@@ -12,8 +12,8 @@
     "prefix_base_class": "http://guara.ueg.br/ontologias/v1/mplclass#",
     "prefix_base_obj": "http://guara.ueg.br/ontologias/v1/mplobj#",
     "prefix_base_repo": "http://guara.ueg.br/ontologias/v1/repositoriosamigos#",
-    "schema_objetos": ":/object",
-    "schema_acervo": ":/collection",
-    "update": "/update",
-    "query": "/query"
+    "schema_objetos": ":",
+    "schema_acervo": ":",
+    "update": "update",
+    "query": "query"
 }

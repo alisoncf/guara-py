@@ -13,6 +13,10 @@ def listar_classes():
         data = request.get_json()
         if 'keyword' not in data:
             return jsonify({"error": 'Invalid input', "message": "Expected JSON with 'keyword' field"}), 400
+        if 'repository' not in data:
+            return jsonify({"error": 'Invalid input', "message": "Expected JSON with 'repository' "}), 400
+        if data['repository']=='' :
+            return jsonify({"error": 'Invalid input', "message": "Expected JSON with 'repository' "}), 400
         if 'orderby' not in data:
             orderby = "class"
         else:
@@ -25,7 +29,7 @@ def listar_classes():
 
         sparql_query = get_sparq_class().replace(
             '%keyword%', keyword).replace('%orderby%', orderby)
-        print(sparql_query)
+        #print(sparql_query)
         headers = {'Content-Type': "application/x-www-form-urlencoded; charset=UTF-8",
                    'Accept': "application/sparql-results+json,*/*;q=0.9",
                    'X-Requested-With': 'XMLHttpRequest'}
@@ -60,17 +64,22 @@ def adicionar_classe():
         data = request.get_json()
 
         # Validar os campos obrigatórios
-        required_fields = ['label', 'comment', 'subclassof']
+        required_fields = ['label', 'comment', 'subclassof', 'repository']
         for field in required_fields:
             if field not in data:
                 return jsonify({"error": "Invalid input", "message": f"Expected JSON with '{field}' field"}), 400
-
+        repo = data['repository']
         nome_classe = data['label'].replace(" ", "_")
 
-        prefix_base = load_config().get('prefix_base_class')
-        class_uri = prefix_base+nome_classe
+        #prefix_base = load_config().get('prefix_base_class')
+        #class_uri = prefix_base+nome_classe
+        #sparqapi_url = load_config().get('class_update_url')
+        
+        prefix_base = repo+"#"
+        class_uri =':'+nome_classe
+        sparqapi_url = repo
 
-        sparqapi_url = load_config().get('class_update_url')
+
         mae = data['subclassof']
         # Montagem da query SPARQL de inserção
         sparql_query = f"""
@@ -115,6 +124,77 @@ def adicionar_classe():
 
     except Exception as e:
         return jsonify({"error": "Exception", "message": str(e)}), 500
+
+@classapi_app.route('/alterar_classe', methods=['POST'])
+def alterar_classe():
+    try:
+        data = request.get_json()
+
+        # Validar os campos obrigatórios
+        required_fields = ['label', 'comment', 'subclassof', 'repository']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({"error": "Invalid input", "message": f"Expected JSON with '{field}' field"}), 400
+        
+        repo = data['repository']
+        nome_classe = data['label'].replace(" ", "_")
+        prefix_base = repo  + "#"
+        class_uri = f":{nome_classe}"
+        sparqapi_url = repo
+
+        mae = data['subclassof']
+        
+        # Query SPARQL para atualizar os dados da classe existente
+        sparql_query = f"""
+            PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+            PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+            PREFIX owl: <http://www.w3.org/2002/07/owl#>
+            PREFIX cmgc: <http://www.guara.ueg.br/ontologias/v1/cmgclass#>
+            PREFIX : <{prefix_base}>
+
+            DELETE WHERE {{
+                {class_uri} rdfs:label ?oldLabel ;
+                              rdfs:comment ?oldComment ;
+                              rdfs:subClassOf ?oldSubclass .
+            }};
+            
+            INSERT DATA {{
+                {class_uri} rdf:type owl:Class ;
+                              rdfs:label "{data['label']}" ;
+                              rdfs:comment "{data['comment']}" ;
+                              rdfs:subClassOf :{mae} .
+            }}
+        """
+        
+        print('query:', sparql_query)
+
+        # Preparação dos headers e dados para a requisição POST
+        headers = {
+            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+            'Accept': "application/sparql-results+json,*/*;q=0.9",
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+        data_envio = {'update': sparql_query}
+        encoded_data = urlencode(data_envio)
+
+        # Enviar a query SPARQL para o endpoint de atualização
+        response = requests.post(
+            sparqapi_url, headers=headers, data=encoded_data)
+
+        if response.status_code == 200:
+            return jsonify({"message": "Classe alterada com sucesso", "id": data['label']}), 200
+        else:
+            return jsonify({"error": response.status_code, "message": response.text}), response.status_code
+
+    except requests.exceptions.RequestException as e:
+        return jsonify({"error": "RequestException", "message": str(e)}), 500
+
+    except KeyError as e:
+        return jsonify({"error": "KeyError", "message": str(e)}), 400
+
+    except Exception as e:
+        return jsonify({"error": "Exception", "message": str(e)}), 500
+
 
 
 @classapi_app.route('/excluir_classe', methods=['DELETE'])
