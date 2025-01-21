@@ -10,6 +10,7 @@ classapi_app = Blueprint('classapi_app', __name__)
 @classapi_app.route('/listar_classes', methods=['POST'])
 def listar_classes():
     try:
+        
         data = request.get_json()
         if 'keyword' not in data:
             return jsonify({"error": 'Invalid input', "message": "Expected JSON with 'keyword' field"}), 400
@@ -21,6 +22,8 @@ def listar_classes():
             orderby = "class"
         else:
             orderby = data['orderby']
+
+        
 
         keyword = data['keyword']
         repo = data['repository']

@@ -11,16 +11,17 @@ PREFIX owl: <http://www.w3.org/2002/07/owl#> """
 
 def get_sparq_obj():
     return get_prefix() + """
-SELECT DISTINCT ?obj ?titulo ?resumo ?colecao (GROUP_CONCAT(DISTINCT ?tipo; SEPARATOR=", ") AS ?tipos)
+SELECT DISTINCT ?obj ?titulo ?resumo ?descricao ?colecao (GROUP_CONCAT(DISTINCT ?tipo; SEPARATOR=", ") AS ?tipos)
 WHERE {
     ?obj a obj:ObjetoFisico.
     ?obj dc:title ?titulo.
     ?obj dc:subject ?resumo.
+    OPTIONAL { ?obj dc:description ?descricao . }
     OPTIONAL { ?obj obj:colecao ?colecao. }
     OPTIONAL { ?obj obj:tipoFisico ?tipo. }
     FILTER (regex(?obj, '', 'i') || regex(?titulo, '', 'i') || regex(?resumo, '', 'i'))
 }
-GROUP BY ?obj ?titulo ?resumo ?colecao
+GROUP BY ?obj ?titulo ?resumo ?colecao ?descricao
             """
 
 
