@@ -7,18 +7,40 @@ from config_loader import load_config
 repo_app = Blueprint('repo_app', __name__)
 
 
-@repo_app.route('/listar_repositorios', methods=['POST'])
+def obter_repositorio_por_nome(name):
+    response = listar_repositorios()  # Chama a função
+    if response.status_code != 200:   # Verifica erro na resposta
+        return None
+
+    repositorios = response.get_json()  # Extrai o JSON corretamente
+
+    
+
+    # Garante que está iterando sobre uma lista válida
+    if "results" in repositorios and "bindings" in repositorios["results"]:
+        for repo in repositorios["results"]["bindings"]:
+            if repo["nome"]["value"].lower() == name.lower():
+                return {
+                    "nome": repo["nome"]["value"],
+                    "uri": repo["uri"]["value"],
+                    "contato": repo["contato"]["value"],
+                    "descricao": repo["descricao"]["value"],
+                    "responsavel": repo["responsavel"]["value"]
+                }
+    
+    return None  # Se não encontrar o repositórioreturn None 
+
+
+@repo_app.route('/listar_repositorios', methods=['GET'])
 def listar_repositorios():
     try:
-        
-        
-        
-
-        
+                
+        nome = request.args.get('name', default=None, type=str)
+        filtro = f'FILTER(?nome = "{nome}"^^xsd:string)' if nome else ''
         sparqapi_url = load_config().get('repo_query_url')
-
-        sparql_query = get_sparq_repo()
-        print(sparql_query)
+        sparql_query = get_sparq_repo().replace("%filter%", filtro)
+                        
+        print('repo',sparql_query)
         headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
                    'Accept': 'application/sparql-results+json,*/*;q=0.9',
                    'X-Requested-With': 'XMLHttpRequest'}

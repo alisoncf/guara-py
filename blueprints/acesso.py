@@ -4,6 +4,7 @@ import json
 import uuid
 from datetime import datetime, timedelta
 from urllib.parse import urlencode
+from blueprints.repositorios import obter_repositorio_por_nome
 acessoapp = Blueprint('acessoapp', __name__)
 
 
@@ -42,24 +43,46 @@ def login():
     data = request.json
     email = data.get('email')
     password = data.get('password')
+    repo = data.get('repository')
 
     query = f"""
     PREFIX foaf: <http://xmlns.com/foaf/0.1/>
     prefix :      <http://guara.ueg.br/ontologias/usuarios#> 
-    SELECT ?s ?permissao ?username WHERE {{
+    SELECT ?s ?permissao ?username ?repositorio WHERE {{
         ?s foaf:mbox "{email}" ;
            foaf:password "{password}" .
            ?s :temPermissao ?permissao.
+           ?s :repo ?repositorio.
            ?s :username ?username
     }}
     """
+    print('repo:',repo)
     print(query)
     results = execute_sparql_query(query)
+    
+
+
+
+    
+    if not results['results']['bindings']:
+        return jsonify({'message': 'Usuário ou senha inválidos para esse repositório'}), 401
+    
+    
+
+
+
+
     user_data = results['results']['bindings'][0]
     user_uri = user_data['s']['value']
     user_permission = user_data['permissao']['value']
     user_name = user_data['username']['value']
+    repo = user_data['repositorio']['value']
 
+    #buscar repositório
+    repo_response = obter_repositorio_por_nome(repo)
+    
+    
+    
     # Gerar token de autenticação
     token = str(uuid.uuid4())
     validade = datetime.now() + timedelta(hours=24)  # Token válido por 24 horas
@@ -74,7 +97,7 @@ def login():
         OPTIONAL {{ <{user_uri}> :validade ?old_validade }}
     }}
     """
-    print(update)
+    
     response = execute_sparql_update(update)
     if response.status_code != 200:
         return jsonify({'message': 'Failed to update token and validade'}), 500
@@ -85,7 +108,9 @@ def login():
         'email': email,
         'permissao': user_permission,
         'token': token,
-        'validade': validade.isoformat()
+        'repositorio': repo,
+        'validade': validade.isoformat(),
+        'repositorio_conectado': repo_response  # Adicionando os repositórios
     }), 200
 
 
