@@ -1,0 +1,29 @@
+@prefix :      <http://guara.ueg.br/ontologias/v1/repositoriosamigos#> .
+@prefix rpa:   <http://guara.ueg.br/ontologias/v1/repositorios#> .
+@prefix rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix owl:   <http://www.w3.org/2002/07/owl#> .
+@prefix xsd:   <http://www.w3.org/2001/XMLSchema#> .
+@prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
+
+:       a                rpa:Repositorio ;
+        rpa:contato      "alisoncf@gmail.com" ;
+        rpa:descricao    "Um repositório para documentos cartoriais" ;
+        rpa:nome         "Repositório de Cartório (Teste)" ;
+        rpa:responsavel  "Alison Filgueiras" ;
+        rpa:uri          <http://200.137.241.247:8080/fuseki/cartorioobj2> .
+
+<http://200.137.241.247:8080/fuseki/dioceseobj#>
+        a                rpa:Repositorio ;
+        rpa:contato      "alison.filgueiras@ueg.br" ;
+        rpa:descricao    "Repositório de teste de uma diocese" ;
+        rpa:nome         "Diocese" ;
+        rpa:responsavel  "Alison C. Filgueiras" ;
+        rpa:uri          <http://200.137.241.247:8080/fuseki/dioceseobj> .
+
+<http://200.137.241.247:8080/fuseki/mplobj#>
+        a                rpa:Repositorio ;
+        rpa:contato      "alison.filgueiras@ueg.br" ;
+        rpa:descricao    "Repositório de teste do Museu Pedro Ludovico" ;
+        rpa:nome         "MPL" ;
+        rpa:responsavel  "Alison C. Filgueiras" ;
+        rpa:uri          <http://200.137.241.247:8080/fuseki/mplobj> .

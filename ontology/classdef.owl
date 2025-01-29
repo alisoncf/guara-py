@@ -1,0 +1,46 @@
+@prefix :      <http://guara.ueg.br/ontologias/v1/classdef#> .
+@prefix rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix owl:   <http://www.w3.org/2002/07/owl#> .
+@prefix xsd:   <http://www.w3.org/2001/XMLSchema#> .
+@prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
+
+# Ontologia que define a estrutura mínima para espaços de memória
+<http://guara.ueg.br/ontologias/v1/classdef>
+        a       owl:Ontology .
+
+# Classe genérica para representar a organização dos espaços de memória
+:Acervo  a      rdfs:Class ;
+        rdfs:label "Acervo" ;
+        rdfs:comment "Classe genérica que agrupa todos os objetos de acervo em um espaço de memória (museu, arquivo, biblioteca, etc.)." .
+
+# Propriedade obrigatória para qualquer classe que representa um objeto de acervo
+:colecao  a       owl:ObjectProperty ;
+          rdfs:domain :Acervo ;  
+          rdfs:range :Acervo ;  
+          rdfs:label "Coleção" ;
+          rdfs:comment "Propriedade para associar um objeto de acervo a uma coleção dentro do espaço de memória." .
+
+# Propriedade obrigatória para a relação entre a classe e sua superclasse
+:pertenceA  a       owl:ObjectProperty ;
+                  rdfs:domain :Acervo ;
+                  rdfs:range :Acervo ;
+                  rdfs:label "Subclasse de" ;
+                  rdfs:comment "Relaciona uma classe ao seu nível superior dentro da hierarquia do acervo." .
+
+# Exemplo de uma classe de objetos específicos do acervo
+:Documento  a      rdfs:Class ;
+        rdfs:label "Documento" ;
+        rdfs:comment "Classe para representar documentos dentro de um acervo." ;
+        rdfs:subClassOf  :Acervo .  # Documento é uma subclasse de Acervo
+
+:Livro  a      rdfs:Class ;
+        rdfs:label "Livro" ;
+        rdfs:comment "Classe para representar livros dentro de um acervo." ;
+        rdfs:subClassOf  :Acervo .  # Livro é uma subclasse de Acervo
+
+:Mapa  a      rdfs:Class ;
+        rdfs:label "Mapa" ;
+        rdfs:comment "Classe para representar mapas dentro de um acervo." ;
+        rdfs:subClassOf  :Acervo .  # Mapa é uma subclasse de Acervo
+
+

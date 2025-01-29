@@ -1,0 +1,33 @@
+@prefix :      <http://guara.ueg.br/ontologias/v1/repositorios#> .
+@prefix rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix owl:   <http://www.w3.org/2002/07/owl#> .
+@prefix xsd:   <http://www.w3.org/2001/XMLSchema#> .
+@prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://200.137.241.247:8080/fuseki/repositorios>
+        a             owl:Ontology ;
+        rdfs:comment  "uma ontologia utilizada para definir repositórios." .
+
+:contato  a     owl:DatatypeProperty .
+
+:nome   a                       owl:DatatypeProperty ;
+        owl:equivalentProperty  <http://purl.org/dc/elements/1.1/label> .
+
+:responsavel  a  owl:DatatypeProperty .
+
+:uri    a                       owl:DatatypeProperty ;
+        owl:equivalentProperty  <http://purl.org/dc/elements/1.1/identifier> .
+
+:Repositorio  a  owl:Class .
+
+:descricao  a                   owl:DatatypeProperty ;
+        owl:equivalentProperty  <http://purl.org/dc/elements/1.1/description> .
+
+<http://purl.org/dc/elements/1.1/description>
+        a       owl:DatatypeProperty .
+
+<http://purl.org/dc/elements/1.1/label>
+        a       owl:DatatypeProperty .
+
+<http://purl.org/dc/elements/1.1/identifier>
+        a       owl:DatatypeProperty .
