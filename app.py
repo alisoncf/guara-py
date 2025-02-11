@@ -39,7 +39,7 @@ app.register_blueprint(classapi_app, url_prefix='/classapi')
 app.register_blueprint(objectapi_app, url_prefix='/objectapi')
 app.register_blueprint(acessoapp, url_prefix='/acesso')
 app.register_blueprint(repo_app, url_prefix='/repositorios')
-app.register_blueprint(uploadapp, url_prefix='/uploadapp')
+app.register_blueprint(uploadapp, url_prefix='/uploadapi')
 
 if __name__ == '__main__':
     # Desativar os avisos de requisições inseguras (opcional)

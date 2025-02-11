@@ -1,5 +1,5 @@
-from flask import Blueprint, request, jsonify
-import requests
+from flask import Blueprint, request, jsonify,current_app
+import requests, os
 import uuid
 # Importe suas funções corretamente
 from consultas import get_sparq_obj, get_prefix
@@ -24,7 +24,6 @@ def listar_objetos_fisicos():
         repo = data['repository']
         
         prefix_base = repo  + "#"
-        #sparqapi_url = load_config().get('object_query_url')
         sparqapi_url = repo
         
         sparql_query = f'PREFIX : <{repo}#> ' + get_sparq_obj().replace('%keyword%', keyword)
@@ -58,22 +57,72 @@ def listar_objetos_fisicos():
     except Exception as e:
         return jsonify({"error": "Exception", "message": str(e)}), 500
 
+@objectapi_app.route('/listar_arquivos', methods=['GET'])
+def listar_arquivos():
+    try:
+        # Obtendo parâmetros da URL
+        objeto_id = request.args.get('objetoId')
+        repo = request.args.get('repositorio')
 
+        if not objeto_id:
+            return jsonify({"error": "Invalid input", "message": "Expected 'objectId' parameter"}), 400
+        if not repo:
+            return jsonify({"error": "Invalid input", "message": "Expected 'repository' parameter"}), 400
+
+        
+        upload_folder = current_app.config.get('UPLOAD_FOLDER')
+        objeto_folder = os.path.join(upload_folder, str(objeto_id))
+        
+        arquivos = []
+        if os.path.exists(objeto_folder) and os.path.isdir(objeto_folder):
+            arquivos = os.listdir(objeto_folder)
+        
+        
+        sparql_query = f"""
+            PREFIX : <{repo}#>
+            SELECT ?a ?s 
+            WHERE {{ 
+                ?a <http://schema.org/associatedMedia> ?s . 
+                FILTER (?a = :{objeto_id})
+            }}
+        """
+
+        headers = {
+            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+            'Accept': 'application/sparql-results+json,*/*;q=0.9',
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+        data = {'query': sparql_query}
+        encoded_data = urlencode(data)
+
+        response = requests.post(repo, headers=headers, data=encoded_data)
+
+        if response.status_code == 200:
+            sparql_result = response.json()
+        else:
+            return jsonify({"error": response.status_code, "message": response.text}), response.status_code
+
+        return jsonify({
+            "arquivos_locais": arquivos,
+            "arquivos_sparql": sparql_result
+        })
+
+    except requests.exceptions.RequestException as e:
+        return jsonify({"error": "RequestException", "message": str(e)}), 500
+    except Exception as e:
+        return jsonify({"error": "Exception", "message": str(e)}), 500
+    
 @objectapi_app.route('/adicionar_objeto_fisico', methods=['POST'])
 def adicionar_objeto_fisico():
     try:
         data = request.get_json()
-        #print(data)
-        # Validar os campos obrigatórios
         required_fields = ['descricao', 'titulo', 'resumo','colecao','repository']
-          
         
         for field in required_fields:
             if field not in data:
                 return jsonify({"error": "Invalid input", "message": f"Expected JSON with '{field}' field"}), 400
         repo = data['repository']
-        #tipo_fisico = data['tipoFisicoAbreviado']
-        #print(tipo_fisico)
+        
         
         object_id = str(uuid.uuid4())
         colecao = data['colecao'].split('#')[-1] 
@@ -195,8 +244,6 @@ def atualizar_objeto_fisico():
             return jsonify({"error": "Invalid input", "message": "Expected JSON with 'id' field"}), 400
 
         required_fields = ['descricao', 'titulo', 'resumo','colecao','repository']
-          
-        
         for field in required_fields:
             if field not in data:
                 return jsonify({"error": "Invalid input", "message": f"Expected JSON with '{field}' field"}), 400
@@ -264,3 +311,45 @@ def atualizar_objeto_fisico():
 
     except Exception as e:
         return jsonify({"error": "Exception", "message": str(e)}), 500
+    
+
+@objectapi_app.route('/adicionar_relacao', methods=['POST'])
+def adicionar_relacao():
+    try:
+        data = request.get_json()
+        objeto = data["objeto_uri"]
+        repositorio = data["repositorio_uri"]
+        midia = data["midia_uri"]
+        propriedade = data["propriedade"]
+        repo = data['repository']
+        sparqapi_url = repo+'/'+load_config().get('update')
+        sparql_query = f"""{get_prefix()}
+        PREFIX : <{repo}#>
+        INSERT DATA {{
+        {objeto} {propriedade} {midia} .
+        }}
+        """
+        print('add relação:',sparql_query, ' no repositório ', sparqapi_url)
+        headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                   'Accept': 'application/sparql-results+json,*/*;q=0.9',
+                   'X-Requested-With': 'XMLHttpRequest'}
+        data = {'update': sparql_query}
+        encoded_data = urlencode(data)
+
+        response = requests.post(
+            sparqapi_url, headers=headers, data=encoded_data)
+
+        if response.status_code == 200:
+            return jsonify({"message": "Objeto digital adicionado com sucesso", "id": objeto}), 200
+        else:
+            print (response.text)
+            return jsonify({"error1": response.status_code, "message": response.text}), response.status_code
+
+    except requests.exceptions.RequestException as e:
+        return jsonify({"error2": "RequestException", "message": str(e)}), 500
+
+    except KeyError as e:
+        return jsonify({"error3": "KeyError", "message": str(e)}), 400
+
+    except Exception as e:
+        return jsonify({"error4": "Exception", "message": str(e)}), 500

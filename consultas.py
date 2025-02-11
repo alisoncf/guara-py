@@ -6,6 +6,7 @@ PREFIX obj: <http://200.137.241.247:8080/fuseki/objetos#>
 PREFIX classdef: <http://200.137.241.247:8080/fuseki/classes#>
 PREFIX dc: <http://purl.org/dc/elements/1.1/>
 PREFIX cmg: <http://www.cmg.ueg.br/schema>
+PREFIX schema: <http://schema.org/>
 PREFIX owl: <http://www.w3.org/2002/07/owl#> """
 
 

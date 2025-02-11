@@ -1,13 +1,15 @@
 from flask import Blueprint, request, jsonify, current_app
 import os, uuid
 from werkzeug.utils import secure_filename
-
-uploadapp = Blueprint('uploadapp', __name__)
+from blueprints.objectapi import adicionar_relacao
+import requests 
+uploadapp = Blueprint('uploadapi', __name__)
 
 @uploadapp.route('/upload', methods=['POST'])
 def upload_files():
     # Obtém o ID do objeto a partir do formulário
     objeto_id = request.form.get('objetoId')
+    repository = request.form.get('repository')
     if not objeto_id:
         return jsonify({'error': 'ID do objeto não fornecido'}), 400
 
@@ -31,15 +33,38 @@ def upload_files():
     # Processa cada arquivo
     for file in arquivos:
         if file.filename:
-            # Gera um nome seguro para o arquivo
+            
             extensao = os.path.splitext(file.filename)
             filename = secure_filename(f"{uuid.uuid4().hex}{extensao}")
             file_path = os.path.join(objeto_folder, filename)
-
-            # Salva o arquivo no servidor
+            
             file.save(file_path)
             arquivos_salvos.append(filename)  # Armazena apenas o nome do arquivo
+            
+            
+            objeto_uri = f":{objeto_id}"
+            midia_uri = f":{filename}"
+            repositorio_uri = "http://www.guara.ueg.br/repositorio"  # Pode ajustar conforme necessário
+            propriedade = "schema:associatedMedia"
+            
 
+            try:
+                response = requests.post(
+                    "http://localhost:5000/objectapi/adicionar_relacao",  # URL da rota `adicionar_relacao`
+                    json={
+                        "objeto_uri": objeto_uri,
+                        "repositorio_uri": repositorio_uri,
+                        "midia_uri": midia_uri,
+                        "propriedade": propriedade,
+                        "repository": repository
+                    }
+                )
+
+                if response.status_code != 200:
+                    
+                    return jsonify("erro",response.text), response.status_code  # Retorna erro se falhar
+            except requests.exceptions.RequestException as e:
+                return jsonify({"error": "Erro ao chamar adicionar_relacao", "message": str (e)}), 500   
     return jsonify({
         'message': 'Arquivos enviados com sucesso!',
         'arquivos': arquivos_salvos  # Retorna a lista de nomes dos arquivos salvos
