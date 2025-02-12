@@ -76,7 +76,7 @@ def listar_arquivos():
         arquivos = []
         if os.path.exists(objeto_folder) and os.path.isdir(objeto_folder):
             arquivos = os.listdir(objeto_folder)
-        
+    
         
         sparql_query = f"""
             PREFIX : <{repo}#>
@@ -102,10 +102,29 @@ def listar_arquivos():
         else:
             return jsonify({"error": response.status_code, "message": response.text}), response.status_code
 
+        arquivos_map = {nome: {"nome": nome, "uri_sparql": ""} for nome in arquivos}
+
+    # Associar as URIs SPARQL aos arquivos correspondentes
+        for item in sparql_result.get("results", {}).get("bindings", []):
+            uri = item["s"]["value"]
+            nome_arquivo = uri.split("#")[-1]  # Obtém apenas o nome do arquivo da URL
+            #print ('procurando ', nome_arquivo,'em',arquivos_map)
+            if nome_arquivo in arquivos_map:
+                arquivos_map[nome_arquivo]["uri_sparql"] = uri
+            else:
+                arquivos_map[nome_arquivo] = {"nome": nome_arquivo, "uri_sparql": uri}
+
+        # Converter para uma lista
+        arquivos_combinados = list(arquivos_map.values())
+
         return jsonify({
             "arquivos_locais": arquivos,
-            "arquivos_sparql": sparql_result
+            "arquivos_sparql": sparql_result,
+            "arquivos_combinados": arquivos_combinados,
+            "path_folder": objeto_folder,
         })
+        
+        
 
     except requests.exceptions.RequestException as e:
         return jsonify({"error": "RequestException", "message": str(e)}), 500
@@ -234,7 +253,56 @@ def excluir_objeto_fisico():
     except Exception as e:
         return jsonify({"error4": "Exception", "message": str(e)}), 500
     
+@objectapi_app.route('/remover_relacao', methods=['DELETE'])
+def remover_relacao():
+    try:
+        data = request.get_json()
 
+        if "s" not in data or "p" not in data or "o" not in data or "repository" not in data:
+            return jsonify({"error": "Invalid input", "message": "Expected JSON with 's','p','o' and 'repository' fields"}), 400
+        
+        repo = data["repository"]
+        
+        s = data["s"]
+        p = data["p"]
+        o = data["s"]
+        
+        
+        sparqapi_url = f"{repo}/{load_config().get('update')}"
+        
+        sparql_query = f"""{get_prefix()}
+            PREFIX : <{repo}#>
+            DELETE WHERE {{
+                {s} {p} {o} .
+            }}
+        """
+        
+        headers = {
+            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+            'Accept': 'application/sparql-results+json,*/*;q=0.9',
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+
+        data = {'update': sparql_query}
+        encoded_data = urlencode(data)
+
+        response = requests.post(sparqapi_url, headers=headers, data=encoded_data)
+
+        if response.status_code == 200:
+            return jsonify({"message": "relação excluído com sucessa", "id": '{s} {p} {o}'}), 200
+        else:
+            print(response.text)
+            return jsonify({"error1": response.status_code, "message": response.text}), response.status_code
+
+    except requests.exceptions.RequestException as e:
+        return jsonify({"error2": "RequestException", "message": str(e)}), 500
+
+    except KeyError as e:
+        return jsonify({"error3": "KeyError", "message": str(e)}), 400
+
+    except Exception as e:
+        return jsonify({"error4": "Exception", "message": str(e)}), 500
+    
 @objectapi_app.route('/atualizar_objeto_fisico', methods=['PUT'])
 def atualizar_objeto_fisico():
     try:

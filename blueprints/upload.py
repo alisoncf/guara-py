@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify, current_app
-import os, uuid
+import os, uuid, shutil
 from werkzeug.utils import secure_filename
 from blueprints.objectapi import adicionar_relacao
 import requests 
@@ -12,7 +12,6 @@ def upload_files():
     repository = request.form.get('repository')
     if not objeto_id:
         return jsonify({'error': 'ID do objeto não fornecido'}), 400
-
 
     upload_folder = current_app.config.get('UPLOAD_FOLDER')
     objeto_folder = os.path.join(upload_folder, str(objeto_id))
@@ -34,8 +33,10 @@ def upload_files():
     for file in arquivos:
         if file.filename:
             
-            extensao = os.path.splitext(file.filename)
+            extensao = os.path.split(".")[-1]
+            print ('extensao: ',extensao)
             filename = secure_filename(f"{uuid.uuid4().hex}{extensao}")
+            print ('file: ',filename)
             file_path = os.path.join(objeto_folder, filename)
             
             file.save(file_path)
@@ -65,6 +66,61 @@ def upload_files():
                     return jsonify("erro",response.text), response.status_code  # Retorna erro se falhar
             except requests.exceptions.RequestException as e:
                 return jsonify({"error": "Erro ao chamar adicionar_relacao", "message": str (e)}), 500   
+    return jsonify({
+        'message': 'Arquivos enviados com sucesso!',
+        'arquivos': arquivos_salvos  # Retorna a lista de nomes dos arquivos salvos
+    }), 200
+
+
+
+@uploadapp.route('/remove', methods=['POST'])
+def remove_file():
+    # Obtém o ID do objeto a partir do formulário
+    objeto_id = request.form.get('objetoId')
+    repository = request.form.get('repositorio')
+    file_name = request.form.get('file')
+    
+    if not objeto_id:
+        return jsonify({'error': 'ID do objeto não fornecido'}), 400
+
+    
+    upload_folder = current_app.config.get('UPLOAD_FOLDER')
+    objeto_folder = os.path.join(upload_folder, str(objeto_id))
+    pasta_excluidos = os.path.join(objeto_folder, "excluidos")
+    
+    if not os.path.exists(pasta_excluidos):
+        os.makedirs(pasta_excluidos)
+
+
+    destino_path = os.path.join(pasta_excluidos, file_name)
+
+    if file_name:
+        
+        file_path = os.path.join(objeto_folder, file_name)
+        #os.remove (file_path)
+        shutil.move(file_path, destino_path)                
+        objeto_uri = f":{objeto_id}"
+        midia_uri = f":{file_name}"
+        propriedade = "schema:associatedMedia"
+        
+
+        try:
+            response = requests.post(
+                "http://localhost:5000/objectapi/remover_relacao",  # URL da rota `adicionar_relacao`
+                json={
+                    "s": objeto_uri,
+                    "p": propriedade,
+                    "o": midia_uri,
+                    "repository": repository
+                }
+            )
+
+            if response.status_code != 200:
+                
+                return jsonify("erro",response.text), response.status_code  # Retorna erro se falhar
+        except requests.exceptions.RequestException as e:
+            return jsonify({"error": "Erro ao chamar adicionar_relacao", "message": str (e)}), 500   
+    
     return jsonify({
         'message': 'Arquivos enviados com sucesso!',
         'arquivos': arquivos_salvos  # Retorna a lista de nomes dos arquivos salvos
