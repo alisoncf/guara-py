@@ -76,9 +76,10 @@ def upload_files():
 @uploadapp.route('/remove', methods=['POST'])
 def remove_file():
     # Obtém o ID do objeto a partir do formulário
-    objeto_id = request.form.get('objetoId')
-    repository = request.form.get('repositorio')
-    file_name = request.form.get('file')
+    data = request.get_json()
+    objeto_id = data['objetoId']
+    repository = data['repositorio']
+    file_name = data['file']
     
     if not objeto_id:
         return jsonify({'error': 'ID do objeto não fornecido'}), 400
@@ -98,14 +99,17 @@ def remove_file():
         
         file_path = os.path.join(objeto_folder, file_name)
         #os.remove (file_path)
-        shutil.move(file_path, destino_path)                
+        try: 
+            shutil.move(file_path, destino_path)                
+        except:
+            ()
         objeto_uri = f":{objeto_id}"
         midia_uri = f":{file_name}"
         propriedade = "schema:associatedMedia"
         
 
         try:
-            response = requests.post(
+            response = requests.delete(
                 "http://localhost:5000/objectapi/remover_relacao",  # URL da rota `adicionar_relacao`
                 json={
                     "s": objeto_uri,
@@ -122,6 +126,5 @@ def remove_file():
             return jsonify({"error": "Erro ao chamar adicionar_relacao", "message": str (e)}), 500   
     
     return jsonify({
-        'message': 'Arquivos enviados com sucesso!',
-        'arquivos': arquivos_salvos  # Retorna a lista de nomes dos arquivos salvos
+        'message': 'Arquivos excluído com sucesso!'
     }), 200
