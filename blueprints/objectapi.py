@@ -76,8 +76,7 @@ def listar_arquivos():
         arquivos = []
         if os.path.exists(objeto_folder) and os.path.isdir(objeto_folder):
             arquivos = os.listdir(objeto_folder)
-    
-        
+            
         sparql_query = f"""
             PREFIX : <{repo}#>
             SELECT ?a ?s 
@@ -86,7 +85,6 @@ def listar_arquivos():
                 FILTER (?a = :{objeto_id})
             }}
         """
-
         headers = {
             'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
             'Accept': 'application/sparql-results+json,*/*;q=0.9',
@@ -102,21 +100,23 @@ def listar_arquivos():
         else:
             return jsonify({"error": response.status_code, "message": response.text}), response.status_code
 
-        arquivos_map = {nome: {"nome": nome, "uri_sparql": ""} for nome in arquivos}
+        arquivos_map = {nome: {"nome": nome, "uri": ""} for nome in arquivos}
 
     # Associar as URIs SPARQL aos arquivos correspondentes
         for item in sparql_result.get("results", {}).get("bindings", []):
             uri = item["s"]["value"]
-            nome_arquivo = uri.split("#")[-1]  # Obtém apenas o nome do arquivo da URL
+            nome_arquivo = uri.split("/")[-1]  # Obtém apenas o nome do arquivo da URL
+            
+            
             #print ('procurando ', nome_arquivo,'em',arquivos_map)
             if nome_arquivo in arquivos_map:
-                arquivos_map[nome_arquivo]["uri_sparql"] = uri
+                arquivos_map[nome_arquivo]["uri"] = uri
             else:
-                arquivos_map[nome_arquivo] = {"nome": nome_arquivo, "uri_sparql": uri}
+                arquivos_map[nome_arquivo] = {"nome": nome_arquivo, "uri": uri}
 
         # Converter para uma lista
         arquivos_combinados = list(arquivos_map.values())
-
+        #print('combinados',arquivos_combinados)
         return jsonify({
             "arquivos_locais": arquivos,
             "arquivos_sparql": sparql_result,
@@ -216,7 +216,7 @@ def excluir_objeto_fisico():
         
         repo = data["repository"]
         objeto_id = data["id"]
-        print(objeto_id)
+        #print(objeto_id)
         objeto_uri = f":{objeto_id}"
         sparqapi_url = f"{repo}/{load_config().get('update')}"
         
@@ -241,7 +241,7 @@ def excluir_objeto_fisico():
         if response.status_code == 200:
             return jsonify({"message": "Objeto físico excluído com sucesso", "id": objeto_id}), 200
         else:
-            print(response.text)
+            #print(response.text)
             return jsonify({"error1": response.status_code, "message": response.text}), response.status_code
 
     except requests.exceptions.RequestException as e:
@@ -291,7 +291,7 @@ def remover_relacao():
         if response.status_code == 200:
             return jsonify({"message": "relação excluído com sucessa", "id": '{s} {p} {o}'}), 200
         else:
-            print(response.text)
+            #print(response.text)
             return jsonify({"error1": response.status_code, "message": response.text}), response.status_code
 
     except requests.exceptions.RequestException as e:
@@ -362,7 +362,7 @@ def atualizar_objeto_fisico():
                    'X-Requested-With': 'XMLHttpRequest'}
             data = {'update': sparql_query}
             encoded_data = urlencode(data)
-            print(sparql_query)    
+            #print(sparql_query)    
             response = requests.post(
                 sparqapi_url, headers=headers, data=encoded_data)
 
@@ -397,7 +397,7 @@ def adicionar_relacao():
         {objeto} {propriedade} {midia} .
         }}
         """
-        print('add relação:',sparql_query, ' no repositório ', sparqapi_url)
+        #print('add relação:',sparql_query, ' no repositório ', sparqapi_url)
         headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
                    'Accept': 'application/sparql-results+json,*/*;q=0.9',
                    'X-Requested-With': 'XMLHttpRequest'}
@@ -410,7 +410,7 @@ def adicionar_relacao():
         if response.status_code == 200:
             return jsonify({"message": "Objeto digital adicionado com sucesso", "id": objeto}), 200
         else:
-            print (response.text)
+            #print (response.text)
             return jsonify({"error1": response.status_code, "message": response.text}), response.status_code
 
     except requests.exceptions.RequestException as e:

@@ -15,7 +15,7 @@ def upload_files():
 
     upload_folder = current_app.config.get('UPLOAD_FOLDER')
     objeto_folder = os.path.join(upload_folder, str(objeto_id))
-
+    
     if not os.path.exists(objeto_folder):
         os.makedirs(objeto_folder)
 
@@ -34,17 +34,17 @@ def upload_files():
         if file.filename:
             
             extensao = os.path.split(".")[-1]
-            print ('extensao: ',extensao)
-            filename = secure_filename(f"{uuid.uuid4().hex}{extensao}")
-            print ('file: ',filename)
-            file_path = os.path.join(objeto_folder, filename)
             
+            filename = secure_filename(f"{uuid.uuid4().hex}{extensao}")
+            file_path = os.path.join(objeto_folder, filename)
+                       
             file.save(file_path)
             arquivos_salvos.append(filename)  # Armazena apenas o nome do arquivo
             
             
             objeto_uri = f":{objeto_id}"
-            midia_uri = f":{filename}"
+            midia_uri = f'"{file_path.replace("\\", "/")}"'
+            print('midiaURI',midia_uri)
             repositorio_uri = "http://www.guara.ueg.br/repositorio"  # Pode ajustar conforme necessário
             propriedade = "schema:associatedMedia"
             
