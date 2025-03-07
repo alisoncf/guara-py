@@ -24,7 +24,7 @@ CORS(app)
 CORS(app, resources={r"/*": {"origins": ["https://localhost:9000"]}})
 
 
-app.config['UPLOAD_FOLDER'] = '/arquivos/upload'
+app.config['UPLOAD_FOLDER'] = '/var/www/imagens'
 
 # Outras configurações (opcional)
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # Limite de 16MB por arquivo
