@@ -69,9 +69,6 @@ def login():
     
     
 
-
-
-
     user_data = results['results']['bindings'][0]
     user_uri = user_data['s']['value']
     user_permission = user_data['permissao']['value']
