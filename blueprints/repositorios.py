@@ -11,7 +11,7 @@ def obter_repositorio_por_nome(name):
     response = listar_repositorios()  # Chama a função
     if response.status_code != 200:   # Verifica erro na resposta
         return None
-
+   
     repositorios = response.get_json()  # Extrai o JSON corretamente
 
     
@@ -19,6 +19,7 @@ def obter_repositorio_por_nome(name):
     # Garante que está iterando sobre uma lista válida
     if "results" in repositorios and "bindings" in repositorios["results"]:
         for repo in repositorios["results"]["bindings"]:
+            print(repo["nome"]["value"].lower(),' =? ',name.lower())
             if repo["nome"]["value"].lower() == name.lower():
                 return {
                     "nome": repo["nome"]["value"],
@@ -40,7 +41,7 @@ def listar_repositorios():
         sparqapi_url = load_config().get('repo_query_url')
         sparql_query = get_sparq_repo().replace("%filter%", filtro)
                         
-        print('repo',sparql_query)
+        #print('repo',sparql_query)
         headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
                    'Accept': 'application/sparql-results+json,*/*;q=0.9',
                    'X-Requested-With': 'XMLHttpRequest'}
@@ -104,8 +105,8 @@ def adicionar_repo():
                                 rpa:responsavel "{data['responsavel']}" .
             }}
         """
-        print('uri', repo_uri)
-        print('q', sparql_query)
+        #print('uri', repo_uri)
+        #print('q', sparql_query)
 
         # Preparação dos headers e dados para a requisição POST
         headers = {

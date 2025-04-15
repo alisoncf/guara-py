@@ -38,13 +38,22 @@ def execute_sparql_query(query):
     return response.json()
 
 
+def extrair_repositorio(url):
+    
+    ultimo_barra_index = url.rfind('/')
+    if ultimo_barra_index != -1:
+        return url[ultimo_barra_index + 1:]
+    else:
+        # Se não houver '/', retorne a própria URL
+        return url
+
 @acessoapp.route('/login', methods=['POST'])
 def login():
     data = request.json
     email = data.get('email')
     password = data.get('password')
     repo = data.get('repository')
-
+    name=data.get('name')
     query = f"""
     PREFIX foaf: <http://xmlns.com/foaf/0.1/>
     prefix :      <http://guara.ueg.br/ontologias/usuarios#> 
@@ -54,12 +63,13 @@ def login():
            ?s :temPermissao ?permissao.
            ?s :repo ?repositorio.
            ?s :username ?username
+           FILTER(CONTAINS(LCASE(STR(?repositorio)), "{  str.lower(name) }"))
     }}
     """
-    print('repo:',repo)
-    print(query)
+    #print('repo:',repo)
+    print('query',query)
     results = execute_sparql_query(query)
-    
+    #print('result:',results)
 
 
 
@@ -76,9 +86,10 @@ def login():
     repo = user_data['repositorio']['value']
 
     #buscar repositório
-    repo_response = obter_repositorio_por_nome(repo)
+    print('name',name)
+    repo_response = obter_repositorio_por_nome(name)
     
-    
+    print(repo_response)
     
     # Gerar token de autenticação
     token = str(uuid.uuid4())
