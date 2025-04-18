@@ -2,18 +2,17 @@ from flask import Blueprint, request, jsonify,current_app
 import requests, os
 import uuid
 # Importe suas funções corretamente
-from consultas import get_sparq_obj, get_prefix
+from consultas import get_sparq_dim, get_prefix
 from config_loader import load_config
 from urllib.parse import urlencode
 
-objectapi_app = Blueprint('objectapi_app', __name__)
+dimapi_app = Blueprint('dimapi_app', __name__)
 
 
-@objectapi_app.route('/listar_objetos', methods=['POST','GET'])
-def listar_objetos_fisicos():
+@dimapi_app.route('/list', methods=['GET','POST'])
+def list():
     try:
         data = request.get_json()
-        
         if 'keyword' not in data:
             return jsonify({"error": "Invalid input", "message": "Expected JSON with 'keyword' field"}), 400
         if 'repository' not in data:
@@ -22,13 +21,14 @@ def listar_objetos_fisicos():
             return jsonify({"error": 'Invalid input', "message": "Expected JSON with 'repository' "}), 400
         keyword = data['keyword']
         repo = data['repository']
+        type = data['type']
         
         prefix_base = repo  + "#"
         sparqapi_url = repo
         
-        sparql_query = f'PREFIX : <{repo}#> ' + get_sparq_obj().replace('%keyword%', keyword)
+        sparql_query = f'PREFIX : <{repo}#> ' + get_sparq_dim().replace('%keyword%', keyword)
         
-        print('q',sparql_query);
+        print('query',sparql_query) 
         headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
                    'Accept': 'application/sparql-results+json,*/*;q=0.9',
                    'X-Requested-With': 'XMLHttpRequest'}
@@ -37,7 +37,7 @@ def listar_objetos_fisicos():
         
         response = requests.post(
             sparqapi_url, headers=headers, data=encoded_data)
-        #print('response: ', response)
+        
 
         if response.status_code == 200:
             result = response.json()
@@ -57,7 +57,7 @@ def listar_objetos_fisicos():
     except Exception as e:
         return jsonify({"error": "Exception", "message": str(e)}), 500
 
-@objectapi_app.route('/listar_arquivos', methods=['GET'])
+@dimapi_app.route('/listar_arquivos', methods=['GET'])
 def listar_arquivos():
     try:
         # Obtendo parâmetros da URL
@@ -131,42 +131,37 @@ def listar_arquivos():
     except Exception as e:
         return jsonify({"error": "Exception", "message": str(e)}), 500
     
-@objectapi_app.route('/adicionar_objeto_fisico', methods=['POST'])
-def adicionar_objeto_fisico():
+@dimapi_app.route('/create', methods=['POST'])
+def create():
     try:
         data = request.get_json()
-        required_fields = ['descricao', 'titulo', 'resumo','colecao','repository']
-        repo = data['repository']
+        required_fields = ['descricao', 'titulo', 'resumo','tipo','repository']
+        
         for field in required_fields:
             if field not in data:
                 return jsonify({"error": "Invalid input", "message": f"Expected JSON with '{field}' field"}), 400
-        
-        if data['titulo']=='':
-            return jsonify({"error": "Invalid input", "message": "Informe um nome/título"}), 400
-        
+        repo = data['repository']
+        type = data['tipo']['uri']
+        print('tipo',type)
         object_id = str(uuid.uuid4())
-        colecao = data['colecao'].split('#')[-1] 
-        
-
         objeto_uri = f":{object_id}"
-        sparqapi_url = repo+'/'+load_config().get('update')
+
         
+        sparqapi_url = repo+'/'+load_config().get('update')
+        #print(sparqapi_url)
         
         tem_relacao_part = f':temRelacao {", ".join(f"<{relacao}>" for relacao in data["temRelacao"])}' if "temRelacao" in data and data["temRelacao"] else ''
         associated_media_part = f'schema:associatedMedia {", ".join(f"<{url}>" for url in data["associatedMedia"])}' if "associatedMedia" in data and data["associatedMedia"] else ''
-        colecao_part = f'obj:colecao :{colecao}' if "colecao" in data and data["colecao"] else ''
-        tipo_fisico_part = f'obj:tipoFisico {", ".join(f":{tipo}" for tipo in data["tipoFisicoAbreviado"])}' if "tipoFisicoAbreviado" in data and data["tipoFisicoAbreviado"] else ''
-
+        
         #print (tipo_fisico_part)
         # Montando a lista de partes da query
         parts = [
             f'dc:description "{data["descricao"]}"',
             f'dc:subject "{data["resumo"]}"',
             f'dc:title "{data["titulo"]}"',
-            colecao_part,
             tem_relacao_part,
             associated_media_part,
-            tipo_fisico_part
+            
         ]
 
         # Remover partes vazias (strings vazias ou espaços em branco)
@@ -176,12 +171,12 @@ def adicionar_objeto_fisico():
         sparql_query = f"""{get_prefix()}
             PREFIX : <{repo}#>
             INSERT DATA {{
-                {objeto_uri} rdf:type obj:ObjetoFisico ;
+                {objeto_uri} rdf:type <{type}> ;
                                 { ' ;\n'.join(parts) } .
             }}
         """
 
-        print('->', sparql_query)  # Debugging
+        #print('->', sparql_query)  # Debugging
         # Enviar a query SPARQL para o endpoint de atualização
         headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
                    'Accept': 'application/sparql-results+json,*/*;q=0.9',
@@ -207,8 +202,8 @@ def adicionar_objeto_fisico():
     except Exception as e:
         return jsonify({"error4": "Exception", "message": str(e)}), 500
 
-@objectapi_app.route('/excluir_objeto_fisico', methods=['DELETE'])
-def excluir_objeto_fisico():
+@dimapi_app.route('/delete', methods=['DELETE','POST'])
+def excluir():
     try:
         data = request.get_json()
 
@@ -217,7 +212,7 @@ def excluir_objeto_fisico():
         
         repo = data["repository"]
         objeto_id = data["id"]
-        
+        #print(objeto_id)
         objeto_uri = f":{objeto_id}"
         sparqapi_url = f"{repo}/{load_config().get('update')}"
         
@@ -254,7 +249,7 @@ def excluir_objeto_fisico():
     except Exception as e:
         return jsonify({"error4": "Exception", "message": str(e)}), 500
     
-@objectapi_app.route('/remover_relacao', methods=['DELETE'])
+@dimapi_app.route('/remover_relacao', methods=['DELETE'])
 def remover_relacao():
     try:
         data = request.get_json()
@@ -304,7 +299,7 @@ def remover_relacao():
     except Exception as e:
         return jsonify({"error4": "Exception", "message": str(e)}), 500
     
-@objectapi_app.route('/atualizar_objeto_fisico', methods=['PUT'])
+@dimapi_app.route('/atualizar_objeto_fisico', methods=['PUT'])
 def atualizar_objeto_fisico():
     try:
         data = request.get_json()
@@ -382,7 +377,7 @@ def atualizar_objeto_fisico():
         return jsonify({"error": "Exception", "message": str(e)}), 500
     
 
-@objectapi_app.route('/adicionar_relacao', methods=['POST'])
+@dimapi_app.route('/adicionar_relacao', methods=['POST'])
 def adicionar_relacao():
     try:
         data = request.get_json()
