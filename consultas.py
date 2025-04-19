@@ -21,7 +21,7 @@ def get_sparq_dim():
         ?obj dc:subject ?resumo.
         OPTIONAL { ?obj dc:description ?descricao . }
         OPTIONAL { ?obj obj:tipoFisico ?tipo. }
-        FILTER (regex(?obj, '', 'i') || regex(?titulo, '', 'i') || regex(?resumo, '', 'i'))
+        FILTER (regex(?obj, '%keyword%', 'i') || regex(?titulo, '%keyword%', 'i') || regex(?resumo, '%keyword%', 'i'))
     }
     GROUP BY ?obj ?titulo ?resumo ?colecao ?descricao ?dimensao
             """
@@ -36,7 +36,7 @@ def get_sparq_obj():
         OPTIONAL { ?obj dc:description ?descricao . }
         OPTIONAL { ?obj obj:colecao ?colecao. }
         OPTIONAL { ?obj obj:tipoFisico ?tipo. }
-        FILTER (regex(?obj, '', 'i') || regex(?titulo, '', 'i') || regex(?resumo, '', 'i'))
+        FILTER (regex(?obj, '%keyword%', 'i') || regex(?titulo, '%keyword%', 'i') || regex(?resumo, '%keyword%', 'i'))
     }
     GROUP BY ?obj ?titulo ?resumo ?colecao ?descricao
             """

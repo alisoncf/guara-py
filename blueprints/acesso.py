@@ -97,7 +97,7 @@ def login():
 
     # Atualizar RDF com token e validade
     update = f"""
-    PREFIX : <http://guara.ueg.br/ontologia/usuarios#>
+    PREFIX : <http://guara.ueg.br/ontologias/usuarios#>
     DELETE {{ <{user_uri}> :token ?old_token ; :validade ?old_validade }}
     INSERT {{ <{user_uri}> :token "{token}" ; :validade "{validade.isoformat()}"}}
     WHERE {{
@@ -130,7 +130,7 @@ def add_curador():
     permissao = data.get('permissao')
 
     update = f"""
-    PREFIX : <http://guara.ueg.br/ontologia/usuarios#>
+    PREFIX : <http://guara.ueg.br/ontologias/usuarios#>
     INSERT DATA {{
         :{username} rdf:type :Curador ;
                    :username "{username}" ;

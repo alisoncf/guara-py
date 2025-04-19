@@ -5,12 +5,13 @@ import uuid
 from consultas import get_sparq_obj, get_prefix
 from config_loader import load_config
 from urllib.parse import urlencode
-
+from blueprints.auth import token_required
+from flask import g
 objectapi_app = Blueprint('objectapi_app', __name__)
 
 
-@objectapi_app.route('/listar_objetos', methods=['POST','GET'])
-def listar_objetos_fisicos():
+@objectapi_app.route('/list', methods=['POST','GET'])
+def list():
     try:
         data = request.get_json()
         
@@ -131,8 +132,9 @@ def listar_arquivos():
     except Exception as e:
         return jsonify({"error": "Exception", "message": str(e)}), 500
     
-@objectapi_app.route('/adicionar_objeto_fisico', methods=['POST'])
-def adicionar_objeto_fisico():
+@objectapi_app.route('/create', methods=['POST'])
+@token_required
+def create():
     try:
         data = request.get_json()
         required_fields = ['descricao', 'titulo', 'resumo','colecao','repository']
@@ -181,7 +183,7 @@ def adicionar_objeto_fisico():
             }}
         """
 
-        print('->', sparql_query)  # Debugging
+        #print('->', sparql_query)  # Debugging
         # Enviar a query SPARQL para o endpoint de atualização
         headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
                    'Accept': 'application/sparql-results+json,*/*;q=0.9',
@@ -207,8 +209,11 @@ def adicionar_objeto_fisico():
     except Exception as e:
         return jsonify({"error4": "Exception", "message": str(e)}), 500
 
-@objectapi_app.route('/excluir_objeto_fisico', methods=['DELETE'])
+@objectapi_app.route('/delete', methods=['DELETE'])
+@token_required
 def excluir_objeto_fisico():
+    
+    print("Usuário autenticado:", g.user_uri)
     try:
         data = request.get_json()
 
@@ -255,6 +260,7 @@ def excluir_objeto_fisico():
         return jsonify({"error4": "Exception", "message": str(e)}), 500
     
 @objectapi_app.route('/remover_relacao', methods=['DELETE'])
+@token_required
 def remover_relacao():
     try:
         data = request.get_json()
@@ -304,11 +310,12 @@ def remover_relacao():
     except Exception as e:
         return jsonify({"error4": "Exception", "message": str(e)}), 500
     
-@objectapi_app.route('/atualizar_objeto_fisico', methods=['PUT'])
-def atualizar_objeto_fisico():
+@objectapi_app.route('/update', methods=['PUT','POST'])
+@token_required
+def update():
     try:
         data = request.get_json()
-
+        print("Usuário autenticado:", g.user_uri)
         if "id" not in data:
             return jsonify({"error": "Invalid input", "message": "Expected JSON with 'id' field"}), 400
 
@@ -317,53 +324,54 @@ def atualizar_objeto_fisico():
             if field not in data:
                 return jsonify({"error": "Invalid input", "message": f"Expected JSON with '{field}' field"}), 400
         repo = data['repository']
-
+        
         object_id = data["id"]
         objeto_uri = f":{object_id}"
         colecao = data['colecao'].split('#')[-1] 
         
         sparqapi_url = repo + '/' + load_config().get('update')
-        tem_relacao_part = f':temRelacao {", ".join(f"<{relacao}>" for relacao in data["temRelacao"])}' if "temRelacao" in data and data["temRelacao"] else ''
-        associated_media_part = f'schema:associatedMedia {", ".join(f"<{url}>" for url in data["associatedMedia"])}' if "associatedMedia" in data and data["associatedMedia"] else ''
-        colecao_part = f'obj:colecao :{colecao}' if "colecao" in data and data["colecao"] else ''
+                
+        
         tipo_fisico_part = f'obj:tipoFisico {", ".join(f"obj:{tipo}" for tipo in data["tipoFisicoAbreviado"])}' if "tipoFisicoAbreviado" in data and data["tipoFisicoAbreviado"] else ''
-
-        #print (tipo_fisico_part)
-        # Montando a lista de partes da query
+        
         parts = [
-            f'dc:description "{data["descricao"]}"',
-            f'dc:subject "{data["resumo"]}"',
-            f'dc:title "{data["titulo"]}"',
-            colecao_part,
-            tem_relacao_part,
-            associated_media_part,
+            
             tipo_fisico_part
         ]
 
         # Remover partes vazias (strings vazias ou espaços em branco)
         parts = [part for part in parts if part.strip()]
-
         
         if parts:
             sparql_query = f"""{get_prefix()}
                 PREFIX : <{repo}#>
                 DELETE {{
-                    {objeto_uri} ?p ?o .
+                    {objeto_uri} dc:description ?oldDescription;
+                      dc:subject ?oldSubject;
+                      dc:title ?oldTitle;
+                      obj:tipoFisico ?oldTipo.
                 }}
                 INSERT {{
                     {objeto_uri} rdf:type obj:ObjetoFisico ;
+                        dc:description "{data["descricao"]}";
+                        dc:subject "{data["resumo"]}";
+                        dc:title "{data["titulo"]}";
                         {' ;\n'.join(parts)} .
                 }}
                 WHERE {{
-                    {objeto_uri} ?p ?o .
+                    {objeto_uri} dc:description ?oldDescription;
+                      dc:subject ?oldSubject;
+                      dc:title ?oldTitle;
+                    obj:tipoFisico ?oldTipo.
                 }}
             """
+            #print('#query:',sparql_query)
             headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
                    'Accept': 'application/sparql-results+json,*/*;q=0.9',
                    'X-Requested-With': 'XMLHttpRequest'}
             data = {'update': sparql_query}
             encoded_data = urlencode(data)
-            #print(sparql_query)    
+            
             response = requests.post(
                 sparqapi_url, headers=headers, data=encoded_data)
 
@@ -383,14 +391,27 @@ def atualizar_objeto_fisico():
     
 
 @objectapi_app.route('/adicionar_relacao', methods=['POST'])
+
 def adicionar_relacao():
     try:
         data = request.get_json()
-        objeto = data["objeto_uri"]
-        repositorio = data["repositorio_uri"]
-        midia = data["midia_uri"]
-        propriedade = data["propriedade"]
-        repo = data['repository']
+        return add_relation(
+            objeto_uri=data["objeto_uri"],
+            repositorio_uri=data["repositorio_uri"],
+            midia_uri=data["midia_uri"],
+            propriedade=data["propriedade"],
+            repository=data["repository"]
+        )
+    except KeyError as e:
+        return jsonify({"error": "KeyError", "message": str(e)}), 400
+
+def add_relation(objeto_uri, repositorio_uri, midia_uri, propriedade, repository):
+    try:
+        objeto = objeto_uri
+        repositorio = repositorio_uri
+        midia = midia_uri
+        propriedade = propriedade
+        repo = repository
         sparqapi_url = repo+'/'+load_config().get('update')
         sparql_query = f"""{get_prefix()}
         PREFIX : <{repo}#>
@@ -398,7 +419,7 @@ def adicionar_relacao():
         {objeto} {propriedade} {midia} .
         }}
         """
-        #print('add relação:',sparql_query, ' no repositório ', sparqapi_url)
+        print('add relação:',sparql_query, ' no repositório ', sparqapi_url)
         headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
                    'Accept': 'application/sparql-results+json,*/*;q=0.9',
                    'X-Requested-With': 'XMLHttpRequest'}

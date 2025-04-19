@@ -1,7 +1,8 @@
 from flask import Blueprint, request, jsonify, current_app
 import os, uuid, shutil
 from werkzeug.utils import secure_filename
-from blueprints.objectapi import adicionar_relacao
+from  blueprints.objectapi import add_relation
+
 import requests 
 uploadapp = Blueprint('uploadapi', __name__)
 
@@ -10,69 +11,73 @@ def upload_files():
     # Obtém o ID do objeto a partir do formulário
     objeto_id = request.form.get('objetoId')
     repository = request.form.get('repository')
-    if not objeto_id:
-        return jsonify({'error': 'ID do objeto não fornecido'}), 400
-
+    links = request.form.getlist('links')
+    arquivos = request.files.getlist('midias')    
+    
     upload_folder = current_app.config.get('UPLOAD_FOLDER')
     objeto_folder = os.path.join(upload_folder, str(objeto_id))
     
     if not os.path.exists(objeto_folder):
         os.makedirs(objeto_folder)
 
-    if 'midias' not in request.files:
-        return jsonify({'error': 'Nenhuma mídia enviada'}), 400
+    if not objeto_id:
+        return jsonify({'error': 'ID do objeto não fornecido'}), 400
 
-    arquivos = request.files.getlist('midias')
-  
-    if not arquivos or all(file.filename == '' for file in arquivos):
-        return jsonify({'error': 'Nenhum arquivo selecionado'}), 400
+
+
+    # Verifica se arquivos foram enviados e se estão válidos (não vazios)
+    arquivos_validos = [file for file in arquivos if file and file.filename.strip() != '']
+
+    # Verifica se há ao menos um link ou ao menos um arquivo válido
+    if not arquivos_validos and len(links) == 0:
+        return jsonify({'error': 'Nenhuma mídia ou link enviado'}), 400
 
     arquivos_salvos = []
 
-    # Processa cada arquivo
-    for file in arquivos:
-        if file.filename:
+    if len(arquivos)>0:
+        for file in arquivos:
+            if file.filename:
+                extensao = os.path.split(".")[-1]
             
-            extensao = os.path.split(".")[-1]
-            
-            filename = secure_filename(f"{uuid.uuid4().hex}{extensao}")
-            file_path = os.path.join(objeto_folder, filename)
+                filename = secure_filename(f"{uuid.uuid4().hex}{extensao}")
+                file_path = os.path.join(objeto_folder, filename)
                        
-            file.save(file_path)
-            arquivos_salvos.append(filename)  # Armazena apenas o nome do arquivo
+                file.save(file_path)
+                arquivos_salvos.append(filename)  # Armazena apenas o nome do arquivo
             
             
+                objeto_uri = f":{objeto_id}"
+                midia_uri = f'"{file_path.replace("\\", "/")}"'
+                print('midiaURI',midia_uri)
+                repositorio_uri = "http://www.guara.ueg.br/repositorio"  
+                propriedade = "schema:associatedMedia"
+                            
+                resultado = add_relation(midia_uri=midia_uri,
+                                         objeto_uri=objeto_uri,
+                                         propriedade=propriedade,
+                                         repositorio_uri=repositorio_uri,
+                                         repository=repository,
+                                         )
+                print('#resultado',resultado)
+                
+    if len(links)>0:
+        for file in arquivos:
             objeto_uri = f":{objeto_id}"
             midia_uri = f'"{file_path.replace("\\", "/")}"'
             print('midiaURI',midia_uri)
-            repositorio_uri = "http://www.guara.ueg.br/repositorio"  # Pode ajustar conforme necessário
+            repositorio_uri = "http://www.guara.ueg.br/repositorio"  
             propriedade = "schema:associatedMedia"
-            
-
-            try:
-                response = requests.post(
-                    "http://localhost:5000/objectapi/adicionar_relacao",  # URL da rota `adicionar_relacao`
-                    json={
-                        "objeto_uri": objeto_uri,
-                        "repositorio_uri": repositorio_uri,
-                        "midia_uri": midia_uri,
-                        "propriedade": propriedade,
-                        "repository": repository
-                    }
-                )
-
-                if response.status_code != 200:
-                    
-                    return jsonify("erro",response.text), response.status_code  # Retorna erro se falhar
-            except requests.exceptions.RequestException as e:
-                return jsonify({"error": "Erro ao chamar adicionar_relacao", "message": str (e)}), 500   
+                        
+            resultado = add_relation(midia_uri=midia_uri,
+                                        objeto_uri=objeto_uri,
+                                        propriedade=propriedade,
+                                        repositorio_uri=repositorio_uri,
+                                        repository=repository,
+                                        )
+            print('#resultado',resultado)
     return jsonify({
-        'message': 'Arquivos enviados com sucesso!',
-        'arquivos': arquivos_salvos  # Retorna a lista de nomes dos arquivos salvos
+        'message': 'Mídias adicionadas!'
     }), 200
-
-
-
 @uploadapp.route('/remove', methods=['POST'])
 def remove_file():
     # Obtém o ID do objeto a partir do formulário

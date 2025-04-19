@@ -5,7 +5,7 @@ import uuid
 from consultas import get_sparq_dim, get_prefix
 from config_loader import load_config
 from urllib.parse import urlencode
-
+from blueprints.auth import token_required
 dimapi_app = Blueprint('dimapi_app', __name__)
 
 
@@ -132,6 +132,7 @@ def listar_arquivos():
         return jsonify({"error": "Exception", "message": str(e)}), 500
     
 @dimapi_app.route('/create', methods=['POST'])
+@token_required
 def create():
     try:
         data = request.get_json()
@@ -142,18 +143,18 @@ def create():
                 return jsonify({"error": "Invalid input", "message": f"Expected JSON with '{field}' field"}), 400
         repo = data['repository']
         type = data['tipo']['uri']
-        print('tipo',type)
+        
         object_id = str(uuid.uuid4())
         objeto_uri = f":{object_id}"
 
         
         sparqapi_url = repo+'/'+load_config().get('update')
-        #print(sparqapi_url)
+       
         
         tem_relacao_part = f':temRelacao {", ".join(f"<{relacao}>" for relacao in data["temRelacao"])}' if "temRelacao" in data and data["temRelacao"] else ''
         associated_media_part = f'schema:associatedMedia {", ".join(f"<{url}>" for url in data["associatedMedia"])}' if "associatedMedia" in data and data["associatedMedia"] else ''
         
-        #print (tipo_fisico_part)
+        
         # Montando a lista de partes da query
         parts = [
             f'dc:description "{data["descricao"]}"',
@@ -161,7 +162,6 @@ def create():
             f'dc:title "{data["titulo"]}"',
             tem_relacao_part,
             associated_media_part,
-            
         ]
 
         # Remover partes vazias (strings vazias ou espaços em branco)
@@ -172,6 +172,8 @@ def create():
             PREFIX : <{repo}#>
             INSERT DATA {{
                 {objeto_uri} rdf:type <{type}> ;
+                rdf:type obj:ObjetoDimensional ;
+                obj:dimensao <{type}> ;
                                 { ' ;\n'.join(parts) } .
             }}
         """
@@ -202,7 +204,10 @@ def create():
     except Exception as e:
         return jsonify({"error4": "Exception", "message": str(e)}), 500
 
+
+
 @dimapi_app.route('/delete', methods=['DELETE','POST'])
+@token_required
 def excluir():
     try:
         data = request.get_json()
@@ -250,6 +255,7 @@ def excluir():
         return jsonify({"error4": "Exception", "message": str(e)}), 500
     
 @dimapi_app.route('/remover_relacao', methods=['DELETE'])
+@token_required
 def remover_relacao():
     try:
         data = request.get_json()
@@ -299,85 +305,72 @@ def remover_relacao():
     except Exception as e:
         return jsonify({"error4": "Exception", "message": str(e)}), 500
     
-@dimapi_app.route('/atualizar_objeto_fisico', methods=['PUT'])
-def atualizar_objeto_fisico():
+@dimapi_app.route('/update', methods=['PUT','POST'])
+@token_required
+def update():
     try:
         data = request.get_json()
-
+        
         if "id" not in data:
             return jsonify({"error": "Invalid input", "message": "Expected JSON with 'id' field"}), 400
 
-        required_fields = ['descricao', 'titulo', 'resumo','colecao','repository']
+        required_fields = ['descricao', 'titulo', 'resumo','id','repository','tipo']
+        
         for field in required_fields:
             if field not in data:
                 return jsonify({"error": "Invalid input", "message": f"Expected JSON with '{field}' field"}), 400
+        
         repo = data['repository']
-
-        object_id = data["id"]
+        description=data['descricao']
+        subject=data['resumo']
+        titulo=data['titulo']
+        object_id = data['id']
         objeto_uri = f":{object_id}"
-        colecao = data['colecao'].split('#')[-1] 
+        sparqapi_url = repo+'/'+load_config().get('update')
         
-        sparqapi_url = repo + '/' + load_config().get('update')
-        tem_relacao_part = f':temRelacao {", ".join(f"<{relacao}>" for relacao in data["temRelacao"])}' if "temRelacao" in data and data["temRelacao"] else ''
-        associated_media_part = f'schema:associatedMedia {", ".join(f"<{url}>" for url in data["associatedMedia"])}' if "associatedMedia" in data and data["associatedMedia"] else ''
-        colecao_part = f'obj:colecao :{colecao}' if "colecao" in data and data["colecao"] else ''
-        tipo_fisico_part = f'obj:tipoFisico {", ".join(f"obj:{tipo}" for tipo in data["tipoFisicoAbreviado"])}' if "tipoFisicoAbreviado" in data and data["tipoFisicoAbreviado"] else ''
-
-        #print (tipo_fisico_part)
-        # Montando a lista de partes da query
-        parts = [
-            f'dc:description "{data["descricao"]}"',
-            f'dc:subject "{data["resumo"]}"',
-            f'dc:title "{data["titulo"]}"',
-            colecao_part,
-            tem_relacao_part,
-            associated_media_part,
-            tipo_fisico_part
-        ]
-
-        # Remover partes vazias (strings vazias ou espaços em branco)
-        parts = [part for part in parts if part.strip()]
-
         
-        if parts:
-            sparql_query = f"""{get_prefix()}
-                PREFIX : <{repo}#>
-                DELETE {{
-                    {objeto_uri} ?p ?o .
-                }}
-                INSERT {{
-                    {objeto_uri} rdf:type obj:ObjetoFisico ;
-                        {' ;\n'.join(parts)} .
-                }}
-                WHERE {{
-                    {objeto_uri} ?p ?o .
-                }}
-            """
-            headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-                   'Accept': 'application/sparql-results+json,*/*;q=0.9',
-                   'X-Requested-With': 'XMLHttpRequest'}
-            data = {'update': sparql_query}
-            encoded_data = urlencode(data)
-            #print(sparql_query)    
-            response = requests.post(
-                sparqapi_url, headers=headers, data=encoded_data)
 
-            
-            
+        sparql_query = f"""{get_prefix()}
+            PREFIX : <{repo}#>
+            DELETE {{
+                {objeto_uri} dc:description ?oldDescription; dc:title ?oldTitle ;
+                dc:subject ?oldSubject.
+            }}
+            INSERT {{
+                {objeto_uri} 
+                    dc:description "{description}";
+                    dc:subject "{subject}";
+                    dc:title "{titulo}" .
+            }}
+            WHERE {{
+                {objeto_uri}  dc:title ?oldTitle ;
+                dc:description ?oldDescription ;
+                dc:subject ?oldSubject.
+            }}
+        """
+        print('update',sparql_query)   
+        headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                'Accept': 'application/sparql-results+json,*/*;q=0.9',
+                'X-Requested-With': 'XMLHttpRequest'}
+        data = {'update': sparql_query}
+        encoded_data = urlencode(data)
+         
+        response = requests.post(
+            sparqapi_url, headers=headers, data=encoded_data)
 
+        if response.status_code == 200:
+            return jsonify({"message": "Objeto atualizado com sucesso", "id": object_id}), 200
+        else:
+            return jsonify({"error": response.status_code, "message": response.text}), response.status_code
 
-            if response.status_code == 200:
-                return jsonify({"message": "Objeto atualizado com sucesso", "id": object_id}), 200
-            else:
-                return jsonify({"error": response.status_code, "message": response.text}), response.status_code
-
-        return jsonify({"message": "Nenhuma alteração enviada"}), 400
+        #return jsonify({"message": "Nenhuma alteração enviada"}), 400
 
     except Exception as e:
         return jsonify({"error": "Exception", "message": str(e)}), 500
     
 
 @dimapi_app.route('/adicionar_relacao', methods=['POST'])
+@token_required
 def adicionar_relacao():
     try:
         data = request.get_json()

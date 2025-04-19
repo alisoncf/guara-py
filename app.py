@@ -7,6 +7,8 @@ from blueprints.acesso import acessoapp
 from blueprints.repositorios import repo_app
 from blueprints.upload import uploadapp
 from blueprints.dimapi import dimapi_app
+from blueprints.midiaapi import midiaapi_app
+
 import ssl
 import os
 from dotenv import load_dotenv
@@ -38,11 +40,12 @@ app.config['ALLOWED_EXTENSIONS'] = {'jpg', 'jpeg', 'png', 'gif', 'mp4'}  # Exten
 # Registrar os aplicativos Flask dos serviços
 app.register_blueprint(sparqapi_app, url_prefix='/sparqapi')
 app.register_blueprint(classapi_app, url_prefix='/classapi')
-app.register_blueprint(objectapi_app, url_prefix='/objectapi')
+app.register_blueprint(objectapi_app, url_prefix='/fis')
 app.register_blueprint(acessoapp, url_prefix='/acesso')
 app.register_blueprint(repo_app, url_prefix='/repositorios')
 app.register_blueprint(uploadapp, url_prefix='/uploadapi')
 app.register_blueprint(dimapi_app,url_prefix='/dim')
+app.register_blueprint(midiaapi_app,url_prefix='/midias')
 if __name__ == '__main__':
     # Desativar os avisos de requisições inseguras (opcional)
     requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
