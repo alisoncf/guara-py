@@ -11,23 +11,23 @@
 :contato  a     owl:DatatypeProperty .
 
 :nome   a                       owl:DatatypeProperty ;
-        owl:equivalentProperty  <http://purl.org/dc/elements/1.1/label> .
+        owl:equivalentProperty  <http://purl.org/dc/terms/label> .
 
 :responsavel  a  owl:DatatypeProperty .
 
 :uri    a                       owl:DatatypeProperty ;
-        owl:equivalentProperty  <http://purl.org/dc/elements/1.1/identifier> .
+        owl:equivalentProperty  <http://purl.org/dc/terms/identifier> .
 
 :Repositorio  a  owl:Class .
 
 :descricao  a                   owl:DatatypeProperty ;
-        owl:equivalentProperty  <http://purl.org/dc/elements/1.1/description> .
+        owl:equivalentProperty  <http://purl.org/dc/terms/description> .
 
-<http://purl.org/dc/elements/1.1/description>
+<http://purl.org/dc/terms/description>
         a       owl:DatatypeProperty .
 
-<http://purl.org/dc/elements/1.1/label>
+<http://purl.org/dc/terms/label>
         a       owl:DatatypeProperty .
 
-<http://purl.org/dc/elements/1.1/identifier>
+<http://purl.org/dc/terms/identifier>
         a       owl:DatatypeProperty .

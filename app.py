@@ -8,6 +8,7 @@ from blueprints.repositorios import repo_app
 from blueprints.upload import uploadapp
 from blueprints.dimapi import dimapi_app
 from blueprints.midiaapi import midiaapi_app
+from blueprints.relationapi import relationapi_app
 
 import ssl
 import os
@@ -46,6 +47,7 @@ app.register_blueprint(repo_app, url_prefix='/repositorios')
 app.register_blueprint(uploadapp, url_prefix='/uploadapi')
 app.register_blueprint(dimapi_app,url_prefix='/dim')
 app.register_blueprint(midiaapi_app,url_prefix='/midias')
+app.register_blueprint(relationapi_app,url_prefix='/relation')
 if __name__ == '__main__':
     # Desativar os avisos de requisições inseguras (opcional)
     requests.packages.urllib3.disable_warnings(InsecureRequestWarning)

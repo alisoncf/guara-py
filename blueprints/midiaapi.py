@@ -84,18 +84,18 @@ def listar_arquivos():
         return jsonify({"error": "Exception", "message": str(e)}), 500
     
 
-def add_relation(objeto_uri, repositorio_uri, midia_uri, propriedade, repository):
+def add_relation(objeto_uri, repositorio_uri, target_uri, propriedade, repository):
     try:
         objeto = objeto_uri
         repositorio = repositorio_uri
-        midia = midia_uri
+        target = target_uri
         propriedade = propriedade
         repo = repository
         sparqapi_url = repo+'/'+load_config().get('update')
         sparql_query = f"""{get_prefix()}
         PREFIX : <{repo}#>
         INSERT DATA {{
-        {objeto} {propriedade} {midia} .
+        {objeto} {propriedade} {target} .
         }}
         """
         print('add relação:',sparql_query, ' no repositório ', sparqapi_url)

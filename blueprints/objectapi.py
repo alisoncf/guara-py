@@ -163,7 +163,7 @@ def create():
         # Montando a lista de partes da query
         parts = [
             f'dc:description "{data["descricao"]}"',
-            f'dc:subject "{data["resumo"]}"',
+            f'dc:abstract "{data["resumo"]}"',
             f'dc:title "{data["titulo"]}"',
             colecao_part,
             tem_relacao_part,
@@ -347,20 +347,20 @@ def update():
                 PREFIX : <{repo}#>
                 DELETE {{
                     {objeto_uri} dc:description ?oldDescription;
-                      dc:subject ?oldSubject;
+                      dc:abstract ?oldAbstract
                       dc:title ?oldTitle;
                       obj:tipoFisico ?oldTipo.
                 }}
                 INSERT {{
                     {objeto_uri} rdf:type obj:ObjetoFisico ;
                         dc:description "{data["descricao"]}";
-                        dc:subject "{data["resumo"]}";
+                        dc:abstract "{data["resumo"]}";
                         dc:title "{data["titulo"]}";
                         {' ;\n'.join(parts)} .
                 }}
                 WHERE {{
                     {objeto_uri} dc:description ?oldDescription;
-                      dc:subject ?oldSubject;
+                      dc:abstract ?oldAbstract
                       dc:title ?oldTitle;
                     obj:tipoFisico ?oldTipo.
                 }}
