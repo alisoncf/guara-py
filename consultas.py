@@ -8,12 +8,13 @@ PREFIX classdef: <http://guara.ueg.br/ontologias/v1/classes#>
 PREFIX dc: <http://purl.org/dc/terms/>
 PREFIX cmg: <http://www.cmg.ueg.br/schema>
 PREFIX schema: <http://schema.org/>
+PREFIX geo: <http://www.opengis.net/ont/geosparql#>
 PREFIX owl: <http://www.w3.org/2002/07/owl#> """
 
 
 def get_sparq_dim():
     return get_prefix() + """
-    SELECT DISTINCT ?obj ?titulo ?resumo ?descricao ?dimensao 
+    SELECT DISTINCT ?obj ?titulo ?resumo ?descricao ?dimensao ?lat ?lon
     WHERE {
         ?obj a ?dimensao .
         FILTER (?dimensao IN (obj:Pessoa, obj:Tempo, obj:Lugar, obj:Evento)).
@@ -21,14 +22,17 @@ def get_sparq_dim():
         ?obj dc:abstract ?resumo.
         OPTIONAL { ?obj dc:description ?descricao . }
         OPTIONAL { ?obj obj:tipoFisico ?tipo. }
+        OPTIONAL { ?obj geo:lat ?lat. }
+        OPTIONAL { ?obj geo:lon ?lon. }
         FILTER (regex(?obj, '%keyword%', 'i') || regex(?titulo, '%keyword%', 'i') || regex(?resumo, '%keyword%', 'i'))
     }
-    GROUP BY ?obj ?titulo ?resumo ?colecao ?descricao ?dimensao
+    GROUP BY ?obj ?titulo ?resumo ?colecao ?descricao ?dimensao ?lat ?lon
     ORDER BY ?dimensao ?titulo
             """
 def get_sparq_all():
     return get_prefix() + """
-        PREFIX : <http://localhost:3030/festas_populares#>  
+        PREFIX : <http://localhost:3030/festas_populares#> 
+        PREFIX geo: <http://www.opengis.net/ont/geosparql#> 
 PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
 PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>

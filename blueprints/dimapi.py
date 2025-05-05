@@ -61,8 +61,7 @@ def list():
 def list_all():
     try:
         data = request.get_json()
-        if 'keyword' not in data:
-            return jsonify({"error": "Invalid input", "message": "Expected JSON with 'keyword' field"}), 400
+        
         if 'repository' not in data:
             return jsonify({"error": 'Invalid input', "message": "Expected JSON with 'repository' "}), 400
         if data['repository']=='' :
@@ -73,23 +72,26 @@ def list_all():
         repo = data['repository']
         tipo = data['type']
         
+
         prefix_base = repo  + "#"
         sparqapi_url = repo
-        replace_tipo=''
-        if tipo=='quem':
-            replace_tipo='a obj:Pessoa;'
-        if tipo=='quando':
-            replace_tipo='a obj:Tempo;'
-        if tipo=='onde':
-            replace_tipo='a obj:Lugar;'
-        if tipo=='oque':
-            replace_tipo='a obj:Evento;'
-        if tipo=='fisico':
-            replace_tipo='a obj:ObjetoFisico;'
+        replace_tipo = {
+            'quem': 'a obj:Pessoa;',
+            'quando': 'a obj:Tempo;',
+            'onde': 'a obj:Lugar;',
+            'oque': 'a obj:Evento;',
+            'fisico': 'a obj:ObjetoFisico;'
+        }.get(tipo, '') 
         
-        sparql_query = f'PREFIX : <{repo}#> ' + get_sparq_all().replace('%keyword%', keyword)
-        sparql_query = sparql_query.replace('%tipo%', replace_tipo)
+        sparql_query = f'PREFIX : <{repo}#> ' + get_sparq_all()
         
+        try:
+            
+            sparql_query = sparql_query.replace('%keyword%', keyword)
+            
+            sparql_query = sparql_query.replace('%tipo%', replace_tipo)
+        except Exception as e:
+            print('eero',e)
 
         print('query',sparql_query) 
         headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
@@ -210,19 +212,29 @@ def create():
         object_id = str(uuid.uuid4())
         objeto_uri = f":{object_id}"
 
-        
+        coordenadas = data['coordenadas']
+        coord=''
+        if coordenadas:
+            lat, lon = coordenadas.split(',')
+            lat = lat.strip()
+            lon = lon.strip()
+            coord = f'geo:lat "{lat}";geo:lon "{lon}";'
+            
         sparqapi_url = repo+'/'+load_config().get('update')
        
         
+            
         tem_relacao_part = f':temRelacao {", ".join(f"<{relacao}>" for relacao in data["temRelacao"])}' if "temRelacao" in data and data["temRelacao"] else ''
         associated_media_part = f'schema:associatedMedia {", ".join(f"<{url}>" for url in data["associatedMedia"])}' if "associatedMedia" in data and data["associatedMedia"] else ''
         
-        
+        descricao = '"""' + data["descricao"].replace('"""', '\\"""') + '"""'
+        resumo = '"""' + data["resumo"].replace('"""', '\\"""') + '"""'
+        titulo = '"""' + data["titulo"].replace('"""', '\\"""') + '"""'
         # Montando a lista de partes da query
         parts = [
-            f'dc:description "{data["descricao"]}"',
-            f'dc:abstract "{data["resumo"]}"',
-            f'dc:title "{data["titulo"]}"',
+            f'dc:description {descricao}',
+            f'dc:abstract {resumo}',
+            f'dc:title {titulo}',
             tem_relacao_part,
             associated_media_part,
         ]
@@ -236,12 +248,13 @@ def create():
             INSERT DATA {{
                 {objeto_uri} rdf:type <{type}> ;
                 rdf:type obj:ObjetoDimensional ;
+                {coord}
                 obj:dimensao <{type}> ;
                                 { ' ;\n'.join(parts) } .
             }}
         """
 
-        #print('->', sparql_query)  # Debugging
+        print('->', sparql_query)  # Debugging
         # Enviar a query SPARQL para o endpoint de atualização
         headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
                    'Accept': 'application/sparql-results+json,*/*;q=0.9',
@@ -368,9 +381,111 @@ def remover_relacao():
     except Exception as e:
         return jsonify({"error4": "Exception", "message": str(e)}), 500
     
-@dimapi_app.route('/update', methods=['PUT','POST'])
+
+@dimapi_app.route('/update', methods=['PUT', 'POST'])
 @token_required
 def update():
+    try:
+        data = request.get_json()
+        
+        # Validação básica dos campos obrigatórios
+        required_fields = ['descricao', 'titulo', 'resumo', 'id', 'repository', 'tipo']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({"error": "Invalid input", "message": f"Expected JSON with '{field}' field"}), 400
+
+        # Captura dos dados
+        repo = data['repository']
+        description = data['descricao']
+        abstract = data['resumo']
+        titulo = data['titulo']
+        object_id = data['id']
+        objeto_uri = f":{object_id}"
+        sparqapi_url = repo + '/' + load_config().get('update')
+        coordenadas = data.get('coordenadas', None)
+
+        # Começa a construir o bloco SPARQL
+        delete_block = f"""
+            {objeto_uri} dc:description ?oldDescription ;
+                        dc:title ?oldTitle ;
+                        dc:abstract ?oldAbstract .
+        """
+
+        insert_block = f"""
+            {objeto_uri} 
+                dc:description \"\"\"{description}\"\"\";
+                dc:abstract \"\"\"{abstract}\"\"\";
+                dc:title \"\"\"{titulo}\"\"\" ;
+        """
+
+        where_block = f"""
+            OPTIONAL {{ {objeto_uri} dc:description ?oldDescription . }}
+            OPTIONAL {{ {objeto_uri} dc:title ?oldTitle . }}
+            OPTIONAL {{ {objeto_uri} dc:abstract ?oldAbstract . }}
+        """
+
+        # Se coordenadas existirem, adiciona no bloco SPARQL
+        if coordenadas:
+            try:
+                lat, lon = coordenadas.split(',')
+                lat = lat.strip()
+                lon = lon.strip()
+
+                delete_block += f"""
+                    {objeto_uri} geo:lat ?oldLat ;
+                                geo:long ?oldLong .
+                """
+                insert_block += f"""
+                    geo:lat \"\"\"{lat}\"\"\" ;
+                    geo:long \"\"\"{lon}\"\"\" .
+                """
+                where_block += f"""
+                    OPTIONAL {{ {objeto_uri} geo:lat ?oldLat . }}
+                    OPTIONAL {{ {objeto_uri} geo:long ?oldLong . }}
+                """
+            except ValueError:
+                print("Coordenadas mal formatadas. Ignorando coordenadas.")
+
+        # Finaliza SPARQL
+        sparql_query = f"""{get_prefix()}
+PREFIX : <{repo}#>
+
+DELETE {{
+    {delete_block}
+}}
+INSERT {{
+    {insert_block}
+}}
+WHERE {{
+    {where_block}
+}}
+"""
+
+        print('SPARQL UPDATE:', sparql_query)
+
+        # Headers e envio da requisição
+        headers = {
+            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+            'Accept': 'application/sparql-results+json,*/*;q=0.9',
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+        data_envio = {'update': sparql_query}
+        encoded_data = urlencode(data_envio)
+
+        response = requests.post(sparqapi_url, headers=headers, data=encoded_data)
+
+        if response.status_code == 200:
+            return jsonify({"message": "Objeto atualizado com sucesso", "id": object_id}), 200
+        else:
+            return jsonify({"error": response.status_code, "message": response.text}), response.status_code
+
+    except Exception as e:
+        return jsonify({"error": "Exception", "message": str(e)}), 500
+
+
+@dimapi_app.route('/update_old', methods=['PUT','POST'])
+@token_required
+def update_old():
     try:
         data = request.get_json()
         
@@ -390,13 +505,14 @@ def update():
         object_id = data['id']
         objeto_uri = f":{object_id}"
         sparqapi_url = repo+'/'+load_config().get('update')
-        
+        coordenadas = data['coordenadas']
         
 
         sparql_query = f"""{get_prefix()}
             PREFIX : <{repo}#>
             DELETE {{
-                {objeto_uri} dc:description ?oldDescription; dc:title ?oldTitle ;
+                {objeto_uri} dc:description ?oldDescription; dc:title ?oldTitle  ;
+                dc:title ?oldTitle  ;
                 dc:abstract ?oldAbstract.
             }}
             INSERT {{

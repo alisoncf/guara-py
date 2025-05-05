@@ -161,10 +161,13 @@ def create():
 
         #print (tipo_fisico_part)
         # Montando a lista de partes da query
+        descricao = '"""' + data["descricao"].replace('"""', '\\"""') + '"""'
+        resumo = '"""' + data["resumo"].replace('"""', '\\"""') + '"""'
+        titulo = '"""' + data["titulo"].replace('"""', '\\"""') + '"""'
         parts = [
-            f'dc:description "{data["descricao"]}"',
-            f'dc:abstract "{data["resumo"]}"',
-            f'dc:title "{data["titulo"]}"',
+            f'dc:description {descricao}',
+            f'dc:abstract {resumo}',
+            f'dc:title {titulo}',
             colecao_part,
             tem_relacao_part,
             associated_media_part,
@@ -183,7 +186,7 @@ def create():
             }}
         """
 
-        #print('->', sparql_query)  # Debugging
+        print('->', sparql_query)  # Debugging
         # Enviar a query SPARQL para o endpoint de atualização
         headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
                    'Accept': 'application/sparql-results+json,*/*;q=0.9',
@@ -341,31 +344,33 @@ def update():
 
         # Remover partes vazias (strings vazias ou espaços em branco)
         parts = [part for part in parts if part.strip()]
-        
+        descricao = '"""' + data["descricao"].replace('"""', '\\"""') + '"""'
+        resumo = '"""' + data["resumo"].replace('"""', '\\"""') + '"""'
+        titulo = '"""' + data["titulo"].replace('"""', '\\"""') + '"""'
         if parts:
             sparql_query = f"""{get_prefix()}
                 PREFIX : <{repo}#>
                 DELETE {{
                     {objeto_uri} dc:description ?oldDescription;
-                      dc:abstract ?oldAbstract
+                      dc:abstract ?oldAbstract;
                       dc:title ?oldTitle;
                       obj:tipoFisico ?oldTipo.
                 }}
                 INSERT {{
                     {objeto_uri} rdf:type obj:ObjetoFisico ;
-                        dc:description "{data["descricao"]}";
-                        dc:abstract "{data["resumo"]}";
-                        dc:title "{data["titulo"]}";
+                        dc:description {descricao};
+                        dc:abstract {resumo};
+                        dc:title {titulo};
                         {' ;\n'.join(parts)} .
                 }}
                 WHERE {{
                     {objeto_uri} dc:description ?oldDescription;
-                      dc:abstract ?oldAbstract
+                      dc:abstract ?oldAbstract;
                       dc:title ?oldTitle;
                     obj:tipoFisico ?oldTipo.
                 }}
             """
-            #print('#query:',sparql_query)
+            print('#query:',sparql_query)
             headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
                    'Accept': 'application/sparql-results+json,*/*;q=0.9',
                    'X-Requested-With': 'XMLHttpRequest'}

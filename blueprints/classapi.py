@@ -81,6 +81,7 @@ def adicionar_classe():
         class_uri =':'+nome_classe
         sparqapi_url = repo
 
+        comment = data['comment'].replace('"""', '\\"""')  # evita quebra de string SPARQL
 
         mae = data['subclassof']
         # Montagem da query SPARQL de inserção
@@ -93,11 +94,11 @@ def adicionar_classe():
             INSERT DATA {{
                 {class_uri} rdf:type owl:Class ;
                                 rdfs:label "{data['label']}" ;
-                                rdfs:comment "{data['comment']}" ;
+                                rdfs:comment \"\"\"{comment}\"\"\" ;
                                 rdfs:subClassOf :{mae} .
             }}
         """
-        
+        print(sparql_query)
 
         # Preparação dos headers e dados para a requisição POST
         headers = {

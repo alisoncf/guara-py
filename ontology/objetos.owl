@@ -24,7 +24,10 @@
 
 
 ###  http://guara.ueg.br/ontologias/v1/objetos#coordenadas
-:coordenadas rdf:type owl:AnnotationProperty .
+:coordenadas rdf:type owl:DatatypeProperty ;
+         rdfs:subPropertyOf owl:topDataProperty ;
+         rdfs:domain :ObjetoDigital ;
+         rdfs:range xsd:string .
 
 
 ###  http://guara.ueg.br/ontologias/v1/objetos#dataEvento
