@@ -1,0 +1,233 @@
+PREFIX :         <http://guara.ueg.br/repositorios/festas_populares#>
+PREFIX classdef: <http://guara.ueg.br/ontologias/v1/classes#>
+PREFIX cmg:      <http://www.cmg.ueg.br/schema>
+PREFIX dc:       <http://purl.org/dc/terms/>
+PREFIX geo:      <http://www.opengis.net/ont/geosparql#>
+PREFIX obj:      <http://guara.ueg.br/ontologias/v1/objetos#>
+PREFIX owl:      <http://www.w3.org/2002/07/owl#>
+PREFIX rdf:      <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs:     <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX schema:   <http://schema.org/>
+PREFIX xsd:      <http://www.w3.org/2001/XMLSchema#>
+
+<http://guara.ueg.br/repositorios/festas_populares>
+        rdf:type  owl:Ontology .
+
+:Acervo  rdf:type     owl:Class;
+        rdfs:comment  "Classe geral para o acervo";
+        rdfs:label    "Acervo" .
+
+<http://localhost:3030/festas_populares#Romaria>
+        rdf:type         owl:Class;
+        rdfs:comment     "As romarias geralmente estão associadas às festas de padroeiros, originando-se de movimentos alternativos dos devotos desde o período colonial brasileiro, tornando-se hoje fenômenos de massas. São peregrinações espontâneas que nasciam geralmente da piedade popular, da aparição de imagens e pagamento de promessas. Em Goiás ocorrem romarias de alcance regional, tais como romaria de Guarinos e Corumbá de Goiás, em homenagem a Nossa Senhora da Penha (figura 2); Abadiânia Velha, em homenagem a Nossa Senhora da Abadia; Jaraguá e Panamá, em homenagem ao Divino Pai Eterno. Outras passaram a ter alcance nacional, como a romaria do Muquém no município de Niquelândia, em homenagem a Nossa Senhora da Abadia e romaria ao Santuário de Trindade em homenagem ao Divino Pai Eterno.";
+        rdfs:label       "Romaria";
+        rdfs:subClassOf  <http://localhost:3030/festas_populares#Acervo> .
+
+<http://localhost:3030/festas_populares#6e7f03f8-2818-4098-90ba-9db01c70d7fc>
+        rdf:type        obj:Lugar;
+        dc:abstract     "A antiga Vila Boa foi  capital.";
+        dc:description  "Conhecida como Vila Boa";
+        dc:title        "Cidade de Goiás" .
+
+<http://localhost:3030/festas_populares#24d28483-d2b8-4503-a5d9-7ae0a6c68c70>
+        rdf:type                obj:ObjetoFisico;
+        obj:colecao             <http://localhost:3030/festas_populares#Folia>;
+        obj:tipoFisico          obj:Bibliotecario;
+        dc:abstract             "um livro sobre folia de Reis";
+        dc:description          "um livro de um pesquisador";
+        dc:title                "Livro sobre folia de Reis";
+        schema:associatedMedia  "/var/www/imagens/24d28483-d2b8-4503-a5d9-7ae0a6c68c70/315c1c48195e43bcaafa1cae8e01765b" .
+
+<http://localhost:3030/festas_populares#Folia>
+        rdf:type         owl:Class;
+        rdfs:comment     "Desde o período colonial, as folias são consideradas como uma forma de catequização adotada pelo catolicismo popular, sobretudo em áreas rurais. Atualmente, as folias estão entre as principais manifestações festivas de Goiás e seguem o calendário dos santos católicos, apesar de não ter necessariamente, uma relação direta com a Igreja Católica, ocorrendo, sobretudo, no ciclo junino e no ciclo natalino";
+        rdfs:label       "Folia";
+        rdfs:subClassOf  <http://localhost:3030/festas_populares#Acervo> .
+
+<http://localhost:3030/festas_populares#9e9efddc-6f48-4b82-8716-885ea62dc446>
+        rdf:type                obj:ObjetoFisico;
+        obj:colecao             <http://localhost:3030/festas_populares#Romaria>;
+        obj:tipoFisico          obj:Imagetico-Sonoro , obj:MuseuLogico;
+        dc:abstract             "algo sobre a romaria";
+        dc:description          "descrição";
+        dc:title                "fotos da romaria";
+        schema:associatedMedia  "/var/www/imagens/9e9efddc-6f48-4b82-8716-885ea62dc446/6b392dbb488747d69875bb5b5ff37119" .
+
+<http://localhost:3030/festas_populares#7dcee94e-58f3-4186-8a05-abfe4f194945>
+        rdf:type                obj:ObjetoFisico;
+        obj:colecao             <http://localhost:3030/festas_populares#Romaria>;
+        obj:tipoFisico          obj:Arqueologico , obj:Arquivistico-Documental;
+        dc:abstract             "Música e identidade na Romaria ao Divino Pai Eterno de Trindade, Goiás de ";
+        dc:description          "José Reinaldo Felipe Martins Filho, 2018";
+        dc:title                "Música e identidade na Romaria ao Divino Pai Eterno de Trindade, Goiás ";
+        schema:associatedMedia  "/var/www/imagens/7dcee94e-58f3-4186-8a05-abfe4f194945/e447d2c00bf0412a8bd1856069c1b60c" , "/var/www/imagens/7dcee94e-58f3-4186-8a05-abfe4f194945/30cf92720af446ac91e27e6bb7f41126" .
+
+<http://localhost:3030/festas_populares#128c3dc7-557a-48b7-b191-edb3b3266345>
+        rdf:type        obj:Evento , obj:ObjetoDimensional;
+        obj:dimensao    obj:Evento;
+        obj:onde        <http://localhost:3030/festas_populares#f034f465-1cce-4a39-81d7-416b4625d66d>;
+        dc:abstract     "A folia de Reis.";
+        dc:description  "A folia de Reis, enquanto manifestação religiosa";
+        dc:title        "Folia de Reis." .
+
+<http://localhost:3030/festas_populares#ba790709-2194-448a-81b3-6f776abf5923>
+        rdf:type                obj:ObjetoFisico;
+        obj:colecao             <http://localhost:3030/festas_populares#Folia>;
+        obj:tipoFisico          obj:Bibliotecario , obj:Arquivistico-Documental;
+        dc:abstract             "Dissertação que apresenta a Folia de São João em Lagolândia (distrito de Pirenópolis, Goiás),  Folia pouco conhecidas que tem por particularidade ser realizada por um grupo de aproximadamente 24 mulheres, chamadas de donzelas. Festividade ligada à memória e ao legado de sua fundadora, a Santa Dica";
+        dc:description          "Dissertação apresenta a Folia de São João em Lagolândia (distrito de Pirenópolis, Goiás), por meio de suas performances culturais. A Folia de São João, com características, até então, pouco conhecidas, tem por particularidade ser realizada por um grupo de aproximadamente 24 mulheres, chamadas de ―donzelas‖, aparentemente, também única no país. Essa manifestação, bem como outras festas religiosas/culturais da região, surge a partir da iniciativa de uma líder religiosa e política da primeira metade do século XX, Benedita Cipriano Gomes, conhecida popularmente como Santa Dica. Essa pesquisa partiu da problemática de que há um rito religioso encenado há décadas na região, com regras e características próprias, ditadas pelo feminino, com a hipótese de que as manifestações acontecem por motivações ligadas à memória e à identidade do lugar, que ultrapassam o viés religioso e devocional. A investigação segue a linha de pesquisa Espaços, Materialidades e Teatralidades, o aspecto temporal e espacial, com ênfase para as personagens e a forma como elas interagem, modificando as relações e os espaços (edifícios, ruas, casas...) por meio de suas performances, de seus corpos femininos e suas relações com a história do lugar e a linguagem como ato, ultrapassando o viés religioso e devocional Os principais autores que dão sustentação à pesquisa são algumas das principais referências mundiais, enquanto discussão e abordagem das performances, da cultura popular, da antropologia e dos ritos, como Richard Schechner (2002, 2006 e 2012), Milton Singer (1985) e Victor Turner (1974, 1978 e 2005), entre outros. A pesquisa teve algumas restrições impostas pela pandemia de COVID-19, em 2020; porém, não houve prejuízo em relação aos objetivos, que pretendiam mostrar as características da festa e o caráter único da festividade na região. Diante disso, conseguiu-se apresentar um resultado dentro do que foi proposto, com material registrado no período do projeto. Como parte da conclusão, foi possível a compreensão da Folia de São João como festividade ligada à memória e ao legado de sua fundadora, a Santa Dica\";\n                      ";
+        dc:title                "ENTRE GIROS, ESMOLAS E DONZELAS: UMA PRÁTICA PERFORMÁTICA DE MULHERES NA FOLIA DE SÃO JOÃO EM LAGOLÂNDIA";
+        schema:associatedMedia  "/var/www/imagens/ba790709-2194-448a-81b3-6f776abf5923/e19ba2363f8d49babfe8486f4376cd5d" , "/var/www/imagens/ba790709-2194-448a-81b3-6f776abf5923/bf6fda91fc684d08afc278efd9839fd4" , "/var/www/imagens/ba790709-2194-448a-81b3-6f776abf5923/2bd20a2ba40c4e7582af45ff3f614c5f" .
+
+<http://localhost:3030/festas_populares#4b77e52c-9d14-4800-bd14-f88b5f1e1c5e>
+        rdf:type        obj:Tempo , obj:ObjetoDimensional;
+        obj:dimensao    obj:Tempo;
+        dc:abstract     "essa é uma classe para ligação dos eventos com o século XX";
+        dc:description  "Classe que representa o século XX vinte";
+        dc:title        "Século XX vinte" .
+
+<http://localhost:3030/festas_populares#59128430-4c67-4a04-bf50-437a8eb9c94d>
+        rdf:type        obj:Pessoa , obj:ObjetoDimensional;
+        obj:dimensao    obj:Pessoa;
+        dc:abstract     "pesquisador";
+        dc:description  "professor da Ueg do curso de Sistemas de Informação";
+        dc:title        "Alison Carlos Filgueiras" .
+
+<http://localhost:3030/festas_populares#dd3c9984-80a2-43e2-ae48-7c2b4376d9ba>
+        rdf:type        obj:Evento , obj:ObjetoDimensional;
+        obj:dimensao    obj:Evento;
+        dc:abstract     "uma versão resumida para o usuário ter uma visão geral";
+        dc:description  "uma descrição pormenorizada do evento com local, marcos históricos, etc";
+        dc:title        "Romaria do Divino Pai Eterno" .
+
+<http://localhost:3030/festas_populares#eee9c103-62e2-46dd-af1c-ce15d31e2f65>
+        rdf:type        obj:Pessoa , obj:ObjetoDimensional;
+        obj:dimensao    obj:Pessoa;
+        dc:abstract     "Autor do trabalho Música e identidade na Romaria ao Divino Pai Eterno de Trindade, Goiás ";
+        dc:description  "pesquisador sobre a romaria do Divino ";
+        dc:title        "José Reinaldo Felipe Martins Filho" .
+
+<http://localhost:3030/festas_populares#f034f465-1cce-4a39-81d7-416b4625d66d>
+        rdf:type        obj:Lugar , obj:ObjetoDimensional;
+        obj:dimensao    obj:Lugar;
+        dc:abstract     "Cidade da região metropolitana de Goiânia conhecida nacionalmente pela festa do Divino Pai Eterno";
+        dc:description  "Cidade de Trindade";
+        dc:title        "Trindade" .
+
+<http://localhost:3030/festas_populares#91e241cf-952b-4109-80ac-af2adaeb6961>
+        rdf:type        obj:Tempo , obj:ObjetoDimensional;
+        obj:dimensao    obj:Tempo;
+        dc:abstract     "última sexta de cada mês1";
+        dc:description  "data que representa a última sexta-feira de cada mês";
+        dc:title        "Útima sexta-feira do mês" .
+
+<http://localhost:3030/festas_populares#9c1b6607-2046-49f5-a01b-73e5ad008734>
+        rdf:type        obj:Pessoa , obj:ObjetoDimensional;
+        obj:dimensao    obj:Pessoa;
+        obj:fisico      <http://localhost:3030/festas_populares#24d28483-d2b8-4503-a5d9-7ae0a6c68c70>;
+        obj:quem        <http://localhost:3030/festas_populares#59128430-4c67-4a04-bf50-437a8eb9c94d>;
+        dc:abstract     "objeto errado";
+        dc:description  "objeto errado";
+        dc:title        "objeto errado" .
+
+<http://localhost:3030/festas_populares#Festa_de_colheita>
+        rdf:type         owl:Class;
+        rdfs:comment     "As festas de colheitas são, dentre as festas classificadas como “rurais”, aquelas que envolvem elementos de memória inseridos na ritualização do plantio e da colheita. Estabelecem-se em vários municípios goianos como uma organização (política, sindical, associativa ou cooperativa) que produz identidades e processos de resistência no campo, principalmente no que tange à produção de alimentos.  Dentre elas, estão a Festa do Tomate (Goianápolis – GO), a Festa da Melancia (Uruana - GO), o Festival Cultural do Pequi (Crixás – GO), a Festa Estadual do Milho (Jataí – GO), a Festa da Jabuticaba (Hidrolândia – GO), a Festa da Banana (Itaguaru – GO), a Festa do Marmelo (Cidade Ocidental – GO) (figura 6), dentre tantas outras que remetem às produções mais relevantes nos municípios.";
+        rdfs:label       "Festa de colheita";
+        rdfs:subClassOf  <http://localhost:3030/festas_populares#Acervo> .
+
+<http://localhost:3030/festas_populares#Cavalhada>
+        rdf:type         owl:Class;
+        rdfs:comment     "As Cavalhadas são manifestações culturais teatralizadas que representam as Cruzadas travadas na Península Ibérica contra o avanço dos árabes no território europeu no século IX. Elas retomam os torneios medievais e lutas entre mouros e cristãos com enredo baseado no livro de Carlos Magno e os Doze Pares da França. As Cavalhadas são compostas por doze cavaleiros “mouros” e doze cavaleiros “cristãos”, vestidos com as cores predominantes de vermelho e de azul, respectivamente.";
+        rdfs:label       "Cavalhada";
+        rdfs:subClassOf  <http://localhost:3030/festas_populares#Acervo> .
+
+<http://localhost:3030/festas_populares#Congada>
+        rdf:type         owl:Class;
+        rdfs:comment     "As Congadas são expressões afrobrasileiras culturais, religiosas e devocionais que combinam desfiles, cantos, danças e representações em honra a santos católicos como Nossa Senhora do Rosário, Santa Efigênia e São Benedito. As irmandades católicas têm uma função primordial na produção destas manifestações, pois possibilitaram a reorganização e a busca da memória e da identidade dos negros de origem banto. \nA Congada é um folguedo difundido em várias regiões do Brasil e ligado aos festejos coloniais dos “reis do Congo”, sendo implementados em seu contexto, elementos de gênese europeia. Nesse sentido, o sincretismo atuou como uma estratégia de resistência no contexto da diáspora africana e da persistente intolerância religiosa.\nGeralmente, a Congada é formada pela reunião dos ternos de Congo, do Reinado e de uma rigorosa hierarquia entre os congadeiros que envolve o General, capitães, instrumentistas, dançadores e aqueles que atuam nos “bastidores” da organização. Em Goiás, a maior manifestação de Congada é a de Catalão (figura 3), que ocorre durante a Festa de Nossa Senhora do Rosário. Atualmente, são 21 ternos de congo e cerca de cinco mil dançadores, que levam o som dos batuques pelas ruas da cidade e as cores vibrantes de cada terno.\n";
+        rdfs:label       "Congada";
+        rdfs:subClassOf  <http://localhost:3030/festas_populares#Acervo> .
+
+<http://localhost:3030/festas_populares#9fc99cd1-ef40-4b66-b656-69b0fcbc17fe>
+        rdf:type        obj:Lugar , obj:ObjetoDimensional;
+        obj:dimensao    obj:Lugar;
+        dc:abstract     "Distrito de Lagolândia, Pirenópolis, Goiás.";
+        dc:description  "O Distrito de Lagolândia, pertencente à pirenópolis,e stá a 8 km da rodovia Pirenópolis–Goianésia (GO-338) e sua principal atividade econômica é a agropecuária. Nessa localidade nasceu Benedita Cipriano, a Santa Dica.";
+        dc:title        "Lagolândia" .
+
+<http://localhost:3030/festas_populares#25dbd5e5-974b-44ad-be66-c59401960e22>
+        rdf:type        obj:Lugar , obj:ObjetoDimensional;
+        obj:dimensao    obj:Lugar;
+        dc:abstract     "A cidade de Monte Alegre de Goiás";
+        dc:description  "A cidade de monte alegre de Goiás";
+        dc:title        "Monte Alegre de Goiás";
+        geo:lat         "-13.2573088";
+        geo:lon         "-46.8925211";
+        geo:long        "-46.8925211" .
+
+<http://localhost:3030/festas_populares#d9d2d805-c16c-4b6f-9218-8363c40778c7>
+        rdf:type        obj:Lugar , obj:ObjetoDimensional;
+        obj:dimensao    obj:Lugar;
+        dc:abstract     "Cidade de Cavalcante, no nordeste Goiano.";
+        dc:description  "Cidade de Cavalcante, no nordeste Goiano.";
+        dc:title        "Cavalcante";
+        geo:lat         "-13.79577";
+        geo:lon         "-47.45577";
+        geo:long        "-47.45577" .
+
+<http://localhost:3030/festas_populares#e4d29c31-c6ad-4ed5-ae27-aeee6680969c>
+        rdf:type        obj:Lugar , obj:ObjetoDimensional;
+        obj:dimensao    obj:Lugar;
+        dc:abstract     "cidade de Mossâmedes";
+        dc:description  "cidade de Mossâmedes em Goiás";
+        dc:title        "Mossâmedes";
+        geo:lat         "-16.1246";
+        geo:lon         "-50.20525" .
+
+<http://localhost:3030/festas_populares#5011b203-5afa-4706-8ed3-60706312aa8c>
+        rdf:type        obj:Evento , obj:ObjetoDimensional;
+        obj:dimensao    obj:Evento;
+        obj:quem        <http://localhost:3030/festas_populares#7c909629-1fb0-45c9-867f-f84228bbfc2d>;
+        dc:abstract     "A Folia de São João, com características, até então, pouco conhecidas, tem por particularidade ser realizada por um grupo de aproximadamente 24 mulheres, chamadas de ―donzelas‖, aparentemente, também única no país. Essa manifestação, bem como outras festas religiosas/culturais da região, surge a partir da iniciativa de uma líder religiosa e política da primeira metade do século XX, Benedita Cipriano Gomes,  Santa Dica.";
+        dc:description  "A Folia de São João, com características, até então, pouco conhecidas, tem por particularidade ser realizada por um grupo de aproximadamente 24 mulheres, chamadas de ―donzelas‖, aparentemente, também única no país. Essa manifestação, bem como outras festas religiosas/culturais da região, surge a partir da iniciativa de uma líder religiosa e política da primeira metade do século XX, Benedita Cipriano Gomes, conhecida popularmente como Santa Dica. Essa pesquisa partiu da problemática de que há um rito religioso encenado há décadas na região, com regras e características próprias, ditadas pelo feminino, com a hipótese de que as manifestações acontecem por motivações ligadas à memória e à identidade do lugar, que ultrapassam o viés religioso e devocional. A investigação segue a linha de pesquisa Espaços, Materialidades e Teatralidades, o aspecto temporal e espacial, com ênfase para as personagens e a forma como elas interagem, modificando as relações e os espaços (edifícios, ruas, casas...) por meio de suas performances, de seus corpos femininos e suas relações com a história do lugar e a linguagem como ato, ultrapassando o viés religioso e devocional";
+        dc:title        "Folia de São João" .
+
+<http://localhost:3030/festas_populares#7c909629-1fb0-45c9-867f-f84228bbfc2d>
+        rdf:type        obj:Pessoa , obj:ObjetoDimensional;
+        obj:dimensao    obj:Pessoa;
+        dc:abstract     "Benedita Cipriano Gomes, conhecida como Santa Dica";
+        dc:description  "Benedita Cipriano Gomes, conhecida como Santa Dica";
+        dc:title        "Benedita Cipriano Gomes" .
+
+<http://localhost:3030/festas_populares#46be0d69-291a-4019-87df-c6663c2eb958>
+        rdf:type        obj:ObjetoFisico;
+        obj:colecao     <http://localhost:3030/festas_populares#Congada>;
+        obj:tipoFisico  <http://localhost:3030/festas_populares#Bibliotecario> , <http://localhost:3030/festas_populares#Arquivistico-Documental>;
+        dc:abstract     "Artigo de Marcos Manoel Ferreira sobre a percepção dos devotos e partícipes acerca  do  sincretismo  religioso,  vivenciados  no  contexto  dos  festejos  em  louvor  à  Nossa  Senhora  do  Rosário,  São  Benedito  e  Santa  Ifigênia,  na  Congada  de  Catalão";
+        dc:description  "neste artigo, buscamos compreender a percepção dos devotos e partícipes acerca  do  sincretismo  religioso,  vivenciados  no  contexto  dos  festejos  em  louvor  à  Nossa  Senhora  do  Rosário,  São  Benedito  e  Santa  Ifigênia,  na  Congada  de  Catalão.  Na perspectiva de uma abordagem dialógica que possibilite compreendermos as vi-vências dos sujeitos envolvidos nesse processo e suas relações no universo imagético, estético,  religioso  e  cultural  nestas  manifestações.  Intentamos  a  elaboração  de  um  estudo  teórico  bibliográfico,  etnográfico-religioso,  cultural  e  empírico,  vivenciado  no âmbito dos festejos. Suas origens, história, subjetividades e interpretações, através de  registros,  observações  e  entrevistas,  com  organizadores  e  devotos.  Frente  as  di-versidades, o pluralismo cultural e religioso, seus ritos e simbolismos, legados de um povo multirracial, bem como, as interposições culturais e religiosas. O catolicismo popular, as religiões afro-brasileiras, africanidade. A cultura popular e a religiosida-de presentes na tradição congolesa, bem como, Angola, Moçambique e outras regiões da África";
+        dc:title        "CONGADA DE CATALÃO (GO): O SINCRETISMO DA FESTA POPULAR NA PERSPECTIVA DOS DEVOTOS" .
+
+<http://localhost:3030/festas_populares#05c558af-1ed5-4dab-9d34-d6ac32c0b907>
+        rdf:type        obj:ObjetoFisico;
+        obj:colecao     <http://localhost:3030/festas_populares#Congada>;
+        obj:tipoFisico  <http://localhost:3030/festas_populares#Bibliotecario> , <http://localhost:3030/festas_populares#Arquivistico-Documental>;
+        dc:abstract     "Dissertação de Eline Nunes Macedo sobre o congo vilaboense";
+        dc:description  "A presente pesquisa tem como propósito contribuir para com a temática das tradições\npopulares e de afrodescendentes do estado de Goiás, partindo do referencial teórico e\nconceitual dos estudos de performances culturais, em especial, a cultura popular e os rituais\ntradicionais, para analisar o grupo de congo existente na cidade de Goiás. A Dança dos\nCongos é uma performance, realizada por afrodescendentes, constituída por marchas de rua e\nembaixadas e, geralmente, realiza-se no Centro Histórico da cidade (reconhecida como\npatrimônio mundial pela UNESCO1), por ocasião da Festa do Divino Espírito Santo e da\nFesta de Nossa Senhora do Rosário. Seus praticantes acreditam que a Dança dos Congos\npossui origem africana e acontece na cidade de Goiás (GO) desde a chegada dos primeiros\nescravos na região, na primeira metade do século XVIII. Os dançantes dessa tradição popular\nsão, em sua maioria, trabalhadores que possuem poucos recursos financeiros e transmitem\nseus saberes por meio da oralidade e pelas experiências adquiridas no contato direto com o\ngrupo, denominado neste trabalho de conhecimento encorporado. O caminho percorrido para\ntorná-lo objeto de estudo foi bastante interessante, no entanto, cheio surpresas, imprevistos e\nturbulência";
+        dc:title        "A DANÇA DOS CONGOS DA CIDADE DE GOIÁS: PERFORMANCES DE UM GRUPO AFRO-BRASILEIRO" .
+
+<http://localhost:3030/festas_populares#a4e249f5-6666-4d4e-933e-7989aff200d0>
+        rdf:type        obj:Evento , obj:ObjetoDimensional;
+        obj:dimensao    obj:Evento;
+        obj:onde        <http://localhost:3030/festas_populares#e9bc2e1e-c24c-4fee-ad94-65d826509658>;
+        dc:abstract     "O Congo Vilaboense, ou Dança dos Congos, é uma tradição afro-brasileira que se manifesta através de danças, cantos e representações teatrais, simbolizando a embaixada de um rei Congo a um rei Cristão. Os participantes, predominantemente trabalhadores afro-brasileiros, vestem-se de forma colorida e utilizam instrumentos como o caracaxá, produzindo uma sonoridade característica. Este ritual, outrora uma prática religiosa significativa dentro da irmandade dos Pretos, foi progressivamente deslocado para o domínio do folclore, especialmente a partir do início do século XX. Documentos e relatos indicam que a Igreja Católica teve um papel na transformação dessa prática religiosa em mera performance cultural, evidenciado pela mudança no nome da igreja local e pela forma como os Congos são mencionados em materiais de divulgação e discursos clericais contemporâneos. Apesar dessa mudança de percepção, os Congos continuam a ser uma rica expressão da identidade cultural e histórica da comunidade vilaboense.\n\n";
+        dc:description  "O Congo Vilaboense é uma manifestação cultural e religiosa de matriz africana, tradicional na cidade de Goiás, que remonta ao período colonial com a chegada dos primeiros escravizados. Historicamente, a Dança dos Congos era um ritual integrante das festividades em honra a Nossa Senhora do Rosário e São Benedito, organizadas pela irmandade Nossa Senhora do Rosário dos Homens Pretos. Com o tempo, devido a mudanças socioculturais e intervenções da Igreja Católica, a natureza religiosa do Congo foi sendo marginalizada, passando a ser percebido e promovido principalmente como uma expressão folclórica e cultural, sem o reconhecimento devido de suas raízes e significados religiosos";
+        dc:title        "Congo vilaboense" .
+
+<http://localhost:3030/festas_populares#e9bc2e1e-c24c-4fee-ad94-65d826509658>
+        rdf:type        obj:Lugar , obj:ObjetoDimensional;
+        obj:dimensao    obj:Lugar;
+        dc:abstract     "A cidade de Goiás, antiga capital do Estado de Goiás.";
+        dc:description  "A cidade de Goiás, antiga capital do Estado de Goiás.";
+        dc:title        "Cidade de Goiás (Vila Boa)";
+        geo:lat         "-15.93275";
+        geo:lon         "-50.14483" .
