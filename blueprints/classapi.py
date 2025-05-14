@@ -7,8 +7,8 @@ from config_loader import load_config
 classapi_app = Blueprint('classapi_app', __name__)
 
 
-@classapi_app.route('/listar_classes', methods=['POST'])
-def listar_classes():
+@classapi_app.route('/list', methods=['POST','GET'])
+def list():
     try:
         data = request.get_json()
         if 'keyword' not in data:
@@ -45,6 +45,7 @@ def listar_classes():
             
             return jsonify(result)
         else:
+            print('erro:',response.text)
             return jsonify({"error": response.status_code, "message": response.text}), response.status_code
 
     except requests.exceptions.RequestException as e:
