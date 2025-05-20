@@ -58,8 +58,10 @@ if __name__ == '__main__':
     if environment == 'development':
         # Rodar o app Flask com suporte a HTTP (desenvolvimento)
         app.run(debug=True, port=5000)
+        from config.development import DevelopmentConfig as Config
     else:
         # Configurar o contexto SSL (produção)
+        from config.production import ProductionConfig as Config
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         context.load_cert_chain('C:/home/certificado/cert.pem',
                                 'C:/home/certificado/key.pem')

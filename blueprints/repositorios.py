@@ -4,11 +4,12 @@ from consultas import get_sparq_repo, get_prefix
 from config_loader import load_config
 from urllib.parse import urlencode
 from config_loader import load_config
+
 repo_app = Blueprint('repo_app', __name__)
 
 
 def obter_repositorio_por_nome(name):
-    response = listar_repositorios()  # Chama a função
+    response = list()  # Chama a função
     if response.status_code != 200:   # Verifica erro na resposta
         return None
    
@@ -32,13 +33,13 @@ def obter_repositorio_por_nome(name):
     return None  # Se não encontrar o repositórioreturn None 
 
 
-@repo_app.route('/listar_repositorios', methods=['GET'])
-def listar_repositorios():
+@repo_app.route('/list', methods=['GET'])
+def list():
     try:
         nome = request.args.get('name', default=None, type=str)
         filtro = f'FILTER(?nome = "{nome}"^^xsd:string)' if nome else ''
         sparqapi_url = load_config().get('repo_query_url')
-        print('url',sparqapi_url)
+        #print('url:',sparqapi_url)
         sparql_query = get_sparq_repo().replace("%filter%", filtro)
                         
         print('query:',sparql_query)
@@ -70,8 +71,8 @@ def listar_repositorios():
         return jsonify({"error": "Exception", "message": str(e)}), 500
 
 
-@repo_app.route('/adicionar_repo', methods=['POST'])
-def adicionar_repo():
+@repo_app.route('/create', methods=['POST'])
+def create():
     try:
         data = request.get_json()
 

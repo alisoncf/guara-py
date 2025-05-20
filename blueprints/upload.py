@@ -7,7 +7,7 @@ import requests
 uploadapp = Blueprint('uploadapi', __name__)
 
 @uploadapp.route('/upload', methods=['POST'])
-def upload_files():
+def upload():
     # Obtém o ID do objeto a partir do formulário
     objeto_id = request.form.get('objetoId')
     repository = request.form.get('repository')

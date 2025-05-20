@@ -3,7 +3,7 @@ import requests
 from consultas import get_sparq_class, get_prefix
 from config_loader import load_config
 from urllib.parse import urlencode
-from config_loader import load_config
+
 classapi_app = Blueprint('classapi_app', __name__)
 
 
