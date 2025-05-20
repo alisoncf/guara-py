@@ -1,0 +1,58 @@
+PREFIX :     <http://guara.ueg.br/ontologias/usuarios#>
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+PREFIX rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+
+:Curador  rdf:type  rdfs:Class .
+
+:Usuario  rdf:type  rdfs:Class .
+
+:temPermissao  rdf:type  rdf:Property;
+        rdfs:domain  :Curador;
+        rdfs:range   rdfs:Literal .
+
+:username  rdf:type  rdf:Property;
+        rdfs:domain  :Usuario;
+        rdfs:range   rdfs:Literal .
+
+:curador1  rdf:type    :Curador;
+        :temPermissao  "admin";
+        :username      "curador1";
+        foaf:mbox      "curador@ueg.br";
+        foaf:password  "senha123" .
+
+foaf:mbox  rdf:type  rdf:Property;
+        rdfs:domain  :Curador;
+        rdfs:range   rdfs:Literal .
+
+foaf:password  rdf:type  rdf:Property;
+        rdfs:domain  :Usuario;
+        rdfs:range   rdfs:Literal .
+
+:alison  rdf:type      :Curador;
+        :repo          "diocese,festas_populares";
+        :temPermissao  "admin";
+        :token         "91cc0241-50e2-4472-a917-d9c22aafbfa3";
+        :username      "alison";
+        :validade      "2025-05-14T20:22:09.009021";
+        foaf:mbox      "alison.filgueiras@ueg.br";
+        foaf:password  "Anapolis1" .
+
+:repo   rdf:type     rdf:Property;
+        rdfs:domain  :Usuario;
+        rdfs:range   rdfs:Literal .
+
+:token  rdf:type     rdf:Property;
+        rdfs:domain  :Usuario;
+        rdfs:range   rdfs:Literal .
+
+:validade  rdf:type  rdf:Property;
+        rdfs:domain  :Usuario;
+        rdfs:range   rdfs:Literal .
+
+:yuri   rdf:type       :Curador;
+        :repo          "diocese";
+        :temPermissao  "admin";
+        :username      "yuri";
+        foaf:mbox      "yuri.pires@aluno.ueg.br";
+        foaf:password  "Anapolis1" , "Ueg123#" .

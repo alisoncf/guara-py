@@ -1,0 +1,29 @@
+PREFIX :     <http://localhost:3030/repositorios#>
+PREFIX dc:   <http://purl.org/dc/elements/1.1/>
+PREFIX owl:  <http://www.w3.org/2002/07/owl#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+
+dc:label  a     owl:DatatypeProperty .
+
+dc:identifier  a  owl:DatatypeProperty .
+
+dc:description  a  owl:DatatypeProperty .
+
+<http://localhost:3030/repositorios>
+        a             owl:Ontology;
+        rdfs:comment  "uma ontologia utilizada para definir repositórios." .
+
+:contato  a     owl:DatatypeProperty .
+
+:nome   a                       owl:DatatypeProperty;
+        owl:equivalentProperty  dc:label .
+
+:responsavel  a  owl:DatatypeProperty .
+
+:uri    a                       owl:DatatypeProperty;
+        owl:equivalentProperty  dc:identifier .
+
+:Repositorio  a  owl:Class .
+
+:descricao  a                   owl:DatatypeProperty;
+        owl:equivalentProperty  dc:description .

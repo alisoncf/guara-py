@@ -162,8 +162,7 @@ PREFIX xsd:      <http://www.w3.org/2001/XMLSchema#>
         dc:description  "A cidade de monte alegre de Goiás";
         dc:title        "Monte Alegre de Goiás";
         geo:lat         "-13.2573088";
-        geo:lon         "-46.8925211";
-        geo:long        "-46.8925211" .
+        geo:lon         "-46.8925211" .
 
 <http://localhost:3030/festas_populares#d9d2d805-c16c-4b6f-9218-8363c40778c7>
         rdf:type        obj:Lugar , obj:ObjetoDimensional;

@@ -1,0 +1,34 @@
+PREFIX :    <http://localhost:3030/repositorios#>
+PREFIX owl: <http://www.w3.org/2002/07/owl#>
+
+<http://localhost:3030/dioceseobj#>
+        a             :Repositorio;
+        :contato      "alison.filgueiras@ueg.br";
+        :descricao    "Repositório de teste de uma diocese";
+        :nome         "Diocese";
+        :responsavel  "Alison C. Filgueiras";
+        :uri          <http://localhost:3030/dioceseobj> .
+
+<http://localhost:3030/mplobj#>
+        a             :Repositorio;
+        :contato      "alison.filgueiras@ueg.br";
+        :descricao    "Repositório de teste do Museu Pedro Ludovico";
+        :nome         "MPL";
+        :responsavel  "Alison C. Filgueiras";
+        :uri          <http://localhost:3030/mplobj> .
+
+<http://localhost:3030/cartorio#>
+        a             :Repositorio;
+        :contato      "alisoncf@gmail.com";
+        :descricao    "Um repositório para documentos cartoriais";
+        :nome         "Repositório de Cartório (Teste)";
+        :responsavel  "Alison Filgueiras";
+        :uri          <http://localhost:3030/cartorioobj2> .
+
+<http://localhost:3030/festas_populares#>
+        a             :Repositorio;
+        :contato      "alison.filgueiras@ueg.br";
+        :descricao    "Um repositório para festas populares de Goiás";
+        :nome         "festas_populares";
+        :responsavel  "Alison Filgueiras";
+        :uri          <http://localhost:3030/festas_populares> .
