@@ -33,7 +33,7 @@ def obter_repositorio_por_nome(name):
     return None  # Se não encontrar o repositórioreturn None 
 
 
-@repo_app.route('/list', methods=['GET'])
+@repo_app.route('/listar_repositorios', methods=['GET'])
 def list():
     try:
         nome = request.args.get('name', default=None, type=str)
