@@ -1,7 +1,9 @@
 from flask import Blueprint, request, jsonify
+from flask_cors import CORS
 import requests, json
 
 sparqapi_app = Blueprint('sparqapi_app', __name__)
+CORS(sparqapi_app)
 
 def load_config1(filename):
     with open(filename, 'r') as f:
