@@ -2,152 +2,445 @@ from flask import Blueprint, request, jsonify,current_app
 import requests, os
 import uuid
 # Importe suas funções corretamente
-from consultas import get_sparq_all,get_sparq_dim, get_prefix
+from consultas import get_sparq_all,get_sparq_dim, get_prefix # get_prefix é usado implicitamente nas queries
 from config_loader import load_config
 from urllib.parse import urlencode
-from blueprints.auth import token_required
+from blueprints.auth import token_required # Importar o decorador de token
+
 dimapi_app = Blueprint('dimapi_app', __name__)
 
-
 @dimapi_app.route('/list', methods=['GET','POST'])
-def list():
-    try:
+def list_dimensional_objects(): # Renomeado de 'list' para maior clareza
+    """
+    Lista objetos dimensionais de um repositório SPARQL com base numa palavra-chave e tipo.
+    Este endpoint suporta GET (com query parameters) e POST (com JSON body).
+    A documentação abaixo foca no método POST. Para GET, use os mesmos parâmetros como query strings.
+    ---
+    tags:
+      - Objetos Dimensionais
+    parameters:
+      - name: keyword
+        in: query
+        required: true
+        description: Palavra-chave para filtrar os objetos (usado se o método for GET).
+        schema:
+          type: string
+        example: "Festa"
+      - name: repository
+        in: query
+        required: true
+        description: URL do endpoint SPARQL do repositório (usado se o método for GET).
+        schema:
+          type: string
+          format: uri
+        example: "http://localhost:3030/mydataset/sparql"
+      - name: type
+        in: query
+        required: true
+        description: Tipo de objeto dimensional a ser listado (usado se o método for GET, não usado diretamente na query get_sparq_dim).
+        schema:
+          type: string
+        example: "Evento"
+    requestBody:
+      description: Parâmetros para busca de objetos dimensionais (usado se o método for POST).
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - keyword
+              - repository
+              - type # Embora 'type' esteja no corpo, a query get_sparq_dim não parece usá-lo diretamente para filtrar por tipo dimensional específico.
+            properties:
+              keyword:
+                type: string
+                description: Palavra-chave para filtrar os objetos.
+                example: "Procissão"
+              repository:
+                type: string
+                format: uri
+                description: URL do endpoint SPARQL do repositório.
+                example: "http://localhost:3030/mydataset/sparql"
+              type:
+                type: string
+                description: Tipo de objeto dimensional (informativo, pois a query get_sparq_dim já filtra por obj:Pessoa, obj:Tempo, etc.).
+                example: "Lugar"
+    responses:
+      200:
+        description: Lista de objetos dimensionais encontrada com sucesso.
+        content:
+          application/json:
+            schema:
+              # Schema para resultado JSON SPARQL padrão
+              type: object
+              properties:
+                head:
+                  type: object
+                  properties:
+                    vars:
+                      type: array
+                      items:
+                        type: string
+                      example: ["obj", "titulo", "resumo", "descricao", "dimensao", "lat", "lon"]
+                results:
+                  type: object
+                  properties:
+                    bindings:
+                      type: array
+                      items:
+                        type: object # Exemplo de um binding
+                        properties:
+                          obj:
+                            type: object
+                            properties:
+                              type: {"type": "string", "example": "uri"}
+                              value: {"type": "string", "format": "uri", "example": "http://example.org/obj/Evento1"}
+                          titulo:
+                            type: object
+                            properties:
+                              type: {"type": "string", "example": "literal"}
+                              value: {"type": "string", "example": "Festa de Aniversário"}
+                          # Adicionar outras vars conforme a query get_sparq_dim
+      400:
+        description: Requisição inválida (ex parâmetros obrigatórios ausentes).
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error: {"type": "string", "example": "Invalid input"}
+                message: {"type": "string", "example": "Campo 'repository' é obrigatório."}
+      500:
+        description: Erro interno no servidor ou falha na comunicação SPARQL.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error: {"type": "string", "example": "RequestException"}
+                message: {"type": "string", "example": "Connection refused"}
+    """
+    if request.method == 'POST':
         data = request.get_json()
-        if 'keyword' not in data:
-            return jsonify({"error": "Invalid input", "message": "Expected JSON with 'keyword' field"}), 400
-        if 'repository' not in data:
-            return jsonify({"error": 'Invalid input', "message": "Expected JSON with 'repository' "}), 400
-        if data['repository']=='' :
-            return jsonify({"error": 'Invalid input', "message": "Expected JSON with 'repository' "}), 400
-        keyword = data['keyword']
-        repo = data['repository']
-        type = data['type']
-        
-        prefix_base = repo  + "#"
-        sparqapi_url = repo
-        
+        if not data:
+            return jsonify({"error": "Invalid input", "message": "Request body cannot be empty for POST"}), 400
+    elif request.method == 'GET':
+        data = request.args
+    else:
+        return jsonify({"error": "Method Not Allowed"}), 405
+
+    keyword = data.get('keyword')
+    repo = data.get('repository')
+    # obj_type = data.get('type') # 'type' não é usado na query get_sparq_dim, ela já tem os tipos fixos.
+
+    if not keyword:
+        return jsonify({"error": "Invalid input", "message": "Campo 'keyword' é obrigatório."}), 400
+    if not repo:
+        return jsonify({"error": 'Invalid input', "message": "Campo 'repository' é obrigatório."}), 400
+
+    sparqapi_url = repo # URL do repositório é o endpoint SPARQL
+
+    try:
+        # A query get_sparq_dim já filtra por obj:Pessoa, obj:Tempo, obj:Lugar, obj:Evento
         sparql_query = f'PREFIX : <{repo}#> ' + get_sparq_dim().replace('%keyword%', keyword)
         
-        print('query',sparql_query) 
         headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
                    'Accept': 'application/sparql-results+json,*/*;q=0.9',
                    'X-Requested-With': 'XMLHttpRequest'}
-        data = {'query': sparql_query}
-        encoded_data = urlencode(data)
+        payload_data = {'query': sparql_query} # Renomeado para evitar conflito com 'data' do request
+        encoded_payload = urlencode(payload_data)
         
-        response = requests.post(
-            sparqapi_url, headers=headers, data=encoded_data)
+        response = requests.post(sparqapi_url, headers=headers, data=encoded_payload)
         
-
         if response.status_code == 200:
             result = response.json()
             return jsonify(result)
         else:
-            return jsonify({"error": response.status_code, "message": response.text}), response.status_code
+            return jsonify({"error": f"SPARQL query failed with status {response.status_code}", "message": response.text}), response.status_code
 
     except requests.exceptions.RequestException as e:
         return jsonify({"error": "RequestException", "message": str(e)}), 500
-
     except KeyError as e:
-        return jsonify({"error": "KeyError", "message": str(e)}), 400
-
-    except TypeError as e:
-        return jsonify({"error": "TypeError", "message": str(e)}), 400
-
+        return jsonify({"error": "KeyError", "message": f"Missing expected field: {str(e)}"}), 400
     except Exception as e:
         return jsonify({"error": "Exception", "message": str(e)}), 500
 
 @dimapi_app.route('/listall', methods=['GET','POST'])
-def list_all():
-    try:
+def list_all_dimensional_or_physical(): # Renomeado de 'list_all'
+    """
+    Lista todos os objetos (físicos ou dimensionais) de um tipo específico ou todos se nenhum tipo for especificado,
+    filtrados por palavra-chave.
+    Este endpoint suporta GET (com query parameters) e POST (com JSON body).
+    A documentação abaixo foca no método POST. Para GET, use os mesmos parâmetros como query strings.
+    ---
+    tags:
+      - Objetos Dimensionais
+      - Objetos Físicos
+    parameters:
+      - name: repository
+        in: query
+        required: true
+        description: URL do endpoint SPARQL do repositório (usado se o método for GET).
+        schema:
+          type: string
+          format: uri
+        example: "http://localhost:3030/mydataset/sparql"
+      - name: type
+        in: query
+        required: false
+        description: Tipo de objeto para listar (quem, quando, onde, oque, fisico). Se omitido, busca em todos os tipos. (usado se o método for GET).
+        schema:
+          type: string
+          enum: ["quem", "quando", "onde", "oque", "fisico"]
+        example: "quem"
+      - name: keyword
+        in: query
+        required: false # A query original get_sparq_all() usa %keyword%
+        description: Palavra-chave para filtrar os resultados (usado se o método for GET).
+        schema:
+          type: string
+        example: "José"
+    requestBody:
+      description: Parâmetros para listar objetos (usado se o método for POST).
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - repository
+            properties:
+              repository:
+                type: string
+                format: uri
+                description: URL do endpoint SPARQL do repositório.
+                example: "http://localhost:3030/mydataset/sparql"
+              type:
+                type: string
+                required: false
+                description: Tipo de objeto para listar (quem, quando, onde, oque, fisico). Se omitido, busca em todos os tipos.
+                enum: ["quem", "quando", "onde", "oque", "fisico"]
+                example: "fisico"
+              keyword:
+                type: string
+                required: false # Assumindo que pode ser opcional
+                description: Palavra-chave para filtrar os resultados.
+                example: "documento"
+    responses:
+      200:
+        description: Lista de objetos encontrada com sucesso.
+        content:
+          application/json:
+            schema:
+              # Schema para resultado JSON SPARQL padrão (get_sparq_all)
+              type: object
+              properties:
+                head:
+                  type: object
+                  properties:
+                    vars:
+                      type: array
+                      items:
+                        type: string
+                      example: ["id", "titulo", "descricao", "assunto", "tipo", "dimensao", "tipoFisico"]
+                results:
+                  type: object
+                  properties:
+                    bindings:
+                      type: array
+                      items:
+                        type: object # Exemplo de um binding
+                        properties:
+                          id: {"type": "object", "properties": {"type": {"type": "string", "example": "uri"}, "value": {"type": "string", "format": "uri", "example": "http://example.org/obj/Doc1"}}}
+                          titulo: {"type": "object", "properties": {"type": {"type": "string", "example": "literal"}, "value": {"type": "string", "example": "Relatório Anual"}}}
+                          # Adicionar outras vars conforme a query get_sparq_all
+      400:
+        description: Requisição inválida.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error: {"type": "string", "example": "Invalid input"}
+                message: {"type": "string", "example": "Campo 'repository' é obrigatório."}
+      500:
+        description: Erro interno no servidor.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error: {"type": "string", "example": "RequestException"}
+                message: {"type": "string", "example": "Connection refused"}
+    """
+    if request.method == 'POST':
         data = request.get_json()
-        
-        if 'repository' not in data:
-            return jsonify({"error": 'Invalid input', "message": "Expected JSON with 'repository' "}), 400
-        if data['repository']=='' :
-            return jsonify({"error": 'Invalid input', "message": "Expected JSON with 'repository' "}), 400
-        if 'type' not in data:
-            return jsonify({"error": "Invalid input", "message": "Expected JSON with 'type' field"}), 400
-        keyword = data['keyword']
-        repo = data['repository']
-        tipo = data['type']
-        
+        if not data:
+            return jsonify({"error": "Invalid input", "message": "Request body cannot be empty for POST"}), 400
+    elif request.method == 'GET':
+        data = request.args
+    else:
+        return jsonify({"error": "Method Not Allowed"}), 405
 
-        prefix_base = repo  + "#"
-        sparqapi_url = repo
-        replace_tipo = {
-            'quem': 'a obj:Pessoa;',
-            'quando': 'a obj:Tempo;',
-            'onde': 'a obj:Lugar;',
-            'oque': 'a obj:Evento;',
-            'fisico': 'a obj:ObjetoFisico;'
-        }.get(tipo, '') 
-        
+    repo = data.get('repository')
+    tipo_param = data.get('type', '') # Default para string vazia se não fornecido
+    keyword = data.get('keyword', '')   # Default para string vazia se não fornecido
+
+    if not repo:
+        return jsonify({"error": 'Invalid input', "message": "Campo 'repository' é obrigatório."}), 400
+
+    sparqapi_url = repo
+    
+    # Mapeamento do parâmetro 'type' para o filtro SPARQL
+    # Se tipo_param for vazio, replace_tipo também será, e a query original get_sparq_all não filtrará por um tipo específico.
+    replace_tipo = {
+        'quem': 'a obj:Pessoa;',
+        'quando': 'a obj:Tempo;',
+        'onde': 'a obj:Lugar;',
+        'oque': 'a obj:Evento;',
+        'fisico': 'a obj:ObjetoFisico;'
+    }.get(tipo_param.lower(), '') # .lower() para case-insensitivity do parâmetro
+
+    try:
         sparql_query = f'PREFIX : <{repo}#> ' + get_sparq_all()
-        
-        try:
-            
-            sparql_query = sparql_query.replace('%keyword%', keyword)
-            
-            sparql_query = sparql_query.replace('%tipo%', replace_tipo)
-        except Exception as e:
-            print('eero',e)
+        sparql_query = sparql_query.replace('%keyword%', keyword)
+        sparql_query = sparql_query.replace('%tipo%', replace_tipo) # %tipo% será substituído por vazio se tipo_param não corresponder
 
-        print('query',sparql_query) 
         headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
                    'Accept': 'application/sparql-results+json,*/*;q=0.9',
                    'X-Requested-With': 'XMLHttpRequest'}
-        data = {'query': sparql_query}
-        encoded_data = urlencode(data)
+        payload_data = {'query': sparql_query}
+        encoded_payload = urlencode(payload_data)
         
-        response = requests.post(
-            sparqapi_url, headers=headers, data=encoded_data)
+        response = requests.post(sparqapi_url, headers=headers, data=encoded_payload)
         
-
         if response.status_code == 200:
             result = response.json()
             return jsonify(result)
         else:
-            return jsonify({"error": response.status_code, "message": response.text}), response.status_code
+            return jsonify({"error": f"SPARQL query failed with status {response.status_code}", "message": response.text}), response.status_code
 
     except requests.exceptions.RequestException as e:
         return jsonify({"error": "RequestException", "message": str(e)}), 500
-
     except KeyError as e:
-        return jsonify({"error": "KeyError", "message": str(e)}), 400
-
-    except TypeError as e:
-        return jsonify({"error": "TypeError", "message": str(e)}), 400
-
+        return jsonify({"error": "KeyError", "message": f"Missing expected field: {str(e)}"}), 400
     except Exception as e:
         return jsonify({"error": "Exception", "message": str(e)}), 500
 
+
 @dimapi_app.route('/listar_arquivos', methods=['GET'])
-def listar_arquivos():
+def listar_arquivos_objeto_dimensional(): # Renomeado de 'listar_arquivos'
+    """
+    Lista arquivos locais e arquivos associados via SPARQL para um objeto específico.
+    ---
+    tags:
+      - Objetos Dimensionais
+      - Mídia
+    parameters:
+      - name: objetoId
+        in: query
+        type: string
+        required: true
+        description: ID do objeto para listar os arquivos.
+        example: "123e4567-e89b-12d3-a456-426614174000"
+      - name: repositorio
+        in: query
+        type: string
+        format: uri
+        required: true
+        description: URL do endpoint SPARQL do repositório para consulta.
+        example: "http://localhost:3030/mydataset/sparql"
+    responses:
+      200:
+        description: Lista de arquivos locais e URIs SPARQL associados.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                arquivos_locais:
+                  type: array
+                  items:
+                    type: string
+                  description: Lista de nomes de arquivos encontrados localmente na pasta do objeto.
+                  example: ["imagem1.jpg", "documento.pdf"]
+                arquivos_sparql: # Resultado bruto da query SPARQL por schema:associatedMedia
+                  type: object
+                  description: Resultado da consulta SPARQL por mídias associadas.
+                arquivos_combinados:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      nome:
+                        type: string
+                        description: Nome do arquivo.
+                        example: "imagem1.jpg"
+                      uri:
+                        type: string
+                        format: uri
+                        nullable: true # Pode não ter URI no grafo se for apenas local
+                        description: URI associada ao arquivo via schema:associatedMedia no SPARQL.
+                        example: "http://example.org/media/imagem1.jpg"
+                  description: Lista combinada de arquivos locais com suas URIs SPARQL, se existentes.
+                path_folder:
+                  type: string
+                  description: Caminho absoluto no servidor para a pasta de uploads do objeto.
+                  example: "/var/www/imagens/123e4567-e89b-12d3-a456-426614174000"
+      400:
+        description: Parâmetros de entrada inválidos (ex objetoId ou repositorio ausente).
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error: {"type": "string", "example": "Invalid input"}
+                message: {"type": "string", "example": "Parâmetro 'objetoId' é obrigatório."}
+      500:
+        description: Erro interno do servidor.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error: {"type": "string", "example": "Exception"}
+                message: {"type": "string", "example": "Erro ao processar a listagem de arquivos."}
+    """
     try:
-        # Obtendo parâmetros da URL
         objeto_id = request.args.get('objetoId')
-        repo = request.args.get('repositorio')
+        repo_sparql_url = request.args.get('repositorio') # URL do endpoint SPARQL
 
         if not objeto_id:
-            return jsonify({"error": "Invalid input", "message": "Expected 'objectId' parameter"}), 400
-        if not repo:
-            return jsonify({"error": "Invalid input", "message": "Expected 'repository' parameter"}), 400
+            return jsonify({"error": "Invalid input", "message": "Parâmetro 'objetoId' é obrigatório."}), 400
+        if not repo_sparql_url:
+            return jsonify({"error": "Invalid input", "message": "Parâmetro 'repositorio' (URL do endpoint SPARQL) é obrigatório."}), 400
 
         
         upload_folder = current_app.config.get('UPLOAD_FOLDER')
-        objeto_folder = os.path.join(upload_folder, str(objeto_id))
-        
-        arquivos = []
-        if os.path.exists(objeto_folder) and os.path.isdir(objeto_folder):
-            arquivos = os.listdir(objeto_folder)
+        if not upload_folder:
+            return jsonify({"error": "Server Configuration Error", "message": "UPLOAD_FOLDER não configurado."}), 500
             
+        objeto_folder_path = os.path.join(upload_folder, str(objeto_id))
+        
+        arquivos_locais_lista = []
+        if os.path.exists(objeto_folder_path) and os.path.isdir(objeto_folder_path):
+            arquivos_locais_lista = os.listdir(objeto_folder_path)
+        
+        # A query SPARQL precisa da URI base do repositório para construir :objeto_id
+        # Vamos assumir que repo_sparql_url é o endpoint de query, e precisamos inferir a base_uri
+        # Esta é uma simplificação; idealmente, a base_uri seria configurada ou passada.
+        # Exemplo: http://localhost:3030/mydataset/sparql -> http://localhost:3030/mydataset#
+        repo_base_uri_inferred = repo_sparql_url.rsplit('/', 1)[0] + "#"
+
+
         sparql_query = f"""
-            PREFIX : <{repo}#>
-            SELECT ?a ?s 
+            PREFIX schema: <http://schema.org/>
+            PREFIX : <{repo_base_uri_inferred}>
+            SELECT ?s ?media_uri
             WHERE {{ 
-                ?a <http://schema.org/associatedMedia> ?s . 
-                FILTER (?a = :{objeto_id})
+                :{objeto_id} schema:associatedMedia ?media_uri .
+                BIND(:{objeto_id} AS ?s) # Para manter a estrutura da resposta original que tinha ?a
             }}
         """
         headers = {
@@ -155,437 +448,868 @@ def listar_arquivos():
             'Accept': 'application/sparql-results+json,*/*;q=0.9',
             'X-Requested-With': 'XMLHttpRequest'
         }
-        data = {'query': sparql_query}
-        encoded_data = urlencode(data)
+        payload_data = {'query': sparql_query}
+        encoded_payload = urlencode(payload_data)
 
-        response = requests.post(repo, headers=headers, data=encoded_data)
+        response = requests.post(repo_sparql_url, headers=headers, data=encoded_payload)
 
+        sparql_result_json = {}
         if response.status_code == 200:
-            sparql_result = response.json()
+            sparql_result_json = response.json()
         else:
-            return jsonify({"error": response.status_code, "message": response.text}), response.status_code
+            # Não retornar erro fatal aqui, pode haver arquivos locais mesmo sem SPARQL
+            print(f"Aviso: Consulta SPARQL para mídias associadas falhou: {response.status_code} - {response.text}")
 
-        arquivos_map = {nome: {"nome": nome, "uri": ""} for nome in arquivos}
 
-    # Associar as URIs SPARQL aos arquivos correspondentes
-        for item in sparql_result.get("results", {}).get("bindings", []):
-            uri = item["s"]["value"]
-            nome_arquivo = uri.split("/")[-1]  # Obtém apenas o nome do arquivo da URL
-            
-            
-            #print ('procurando ', nome_arquivo,'em',arquivos_map)
-            if nome_arquivo in arquivos_map:
-                arquivos_map[nome_arquivo]["uri"] = uri
-            else:
-                arquivos_map[nome_arquivo] = {"nome": nome_arquivo, "uri": uri}
+        arquivos_map = {nome: {"nome": nome, "uri": None} for nome in arquivos_locais_lista}
 
-        # Converter para uma lista
-        arquivos_combinados = list(arquivos_map.values())
-        #print('combinados',arquivos_combinados)
+        for item in sparql_result_json.get("results", {}).get("bindings", []):
+            media_uri_value = item.get("media_uri", {}).get("value")
+            if media_uri_value:
+                # Tenta extrair o nome do arquivo da URI para correspondência
+                # Isso é uma heurística e pode precisar de ajuste dependendo da estrutura da URI da mídia
+                nome_arquivo_da_uri = media_uri_value.split("/")[-1]
+                
+                if nome_arquivo_da_uri in arquivos_map:
+                    arquivos_map[nome_arquivo_da_uri]["uri"] = media_uri_value
+                else: # Mídia existe no SPARQL mas não localmente (ou nome não bate)
+                    arquivos_map[nome_arquivo_da_uri] = {"nome": nome_arquivo_da_uri, "uri": media_uri_value}
+        
+        arquivos_combinados_lista = list(arquivos_map.values())
+        
         return jsonify({
-            "arquivos_locais": arquivos,
-            "arquivos_sparql": sparql_result,
-            "arquivos_combinados": arquivos_combinados,
-            "path_folder": objeto_folder,
+            "arquivos_locais": arquivos_locais_lista,
+            "arquivos_sparql": sparql_result_json, # Retorna o resultado bruto do SPARQL também
+            "arquivos_combinados": arquivos_combinados_lista,
+            "path_folder": objeto_folder_path,
         })
         
-        
-
     except requests.exceptions.RequestException as e:
         return jsonify({"error": "RequestException", "message": str(e)}), 500
     except Exception as e:
         return jsonify({"error": "Exception", "message": str(e)}), 500
-    
+
 @dimapi_app.route('/create', methods=['POST'])
-@token_required
-def create():
-    try:
-        data = request.get_json()
-        required_fields = ['descricao', 'titulo', 'resumo','tipo','repository']
-        
-        for field in required_fields:
-            if field not in data:
-                return jsonify({"error": "Invalid input", "message": f"Expected JSON with '{field}' field"}), 400
-        repo = data['repository']
-        type = data['tipo']['uri']
-        
-        object_id = str(uuid.uuid4())
-        objeto_uri = f":{object_id}"
+@token_required # Protegendo o endpoint
+def create_dimensional_object(): # Renomeado de 'create'
+    """
+    Cria um novo objeto dimensional (Pessoa, Lugar, Tempo, Evento) no repositório SPARQL.
+    ---
+    tags:
+      - Objetos Dimensionais
+    security:
+      - BearerAuth: [] # Referenciar a definição de segurança global
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - titulo
+              - resumo
+              - tipo_uri # URI completa do tipo dimensional (ex http://guara.ueg.br/ontologias/v1/objetos#Pessoa)
+              - repository_update_url
+              - repository_base_uri
+            properties:
+              descricao:
+                type: string
+                nullable: true
+                description: Descrição detalhada do objeto dimensional.
+                example: "Participou de eventos históricos importantes na região."
+              titulo:
+                type: string
+                description: Título ou nome principal do objeto dimensional.
+                example: "João Silva"
+              resumo: # 'abstract' no DC, 'subject' na query original de update. Usando 'resumo' para consistência com outros endpoints.
+                type: string
+                description: Resumo ou breve descrição do objeto dimensional.
+                example: "Historiador e pesquisador local."
+              tipo_uri:
+                type: string
+                format: uri
+                description: URI completa do tipo do objeto dimensional (ex obj:Pessoa, obj:Lugar).
+                example: "http://guara.ueg.br/ontologias/v1/objetos#Pessoa"
+              coordenadas: # Para obj:Lugar
+                type: string
+                nullable: true
+                description: "Coordenadas geográficas no formato 'latitude,longitude'. Aplicável para tipo Lugar."
+                example: "-16.3285,-48.9534"
+              temRelacao:
+                type: array
+                items:
+                  type: string
+                  format: uri
+                nullable: true
+                description: "Lista de URIs de outros recursos relacionados a este objeto."
+                example: ["http://example.org/obj/EventoX", "http://example.org/obj/DocumentoY"]
+              associatedMedia:
+                type: array
+                items:
+                  type: string
+                  format: uri
+                nullable: true
+                description: "Lista de URIs de mídias associadas a este objeto."
+                example: ["http://example.org/media/foto_joao.jpg"]
+              repository_update_url:
+                type: string
+                format: uri
+                description: URL do endpoint SPARQL de atualização do repositório.
+                example: "http://localhost:3030/mydataset/update"
+              repository_base_uri: # Usado para construir a URI do novo objeto
+                type: string
+                format: uri
+                description: URI base para os novos objetos neste repositório.
+                example: "http://localhost:3030/mydataset#"
+    responses:
+      201:
+        description: Objeto dimensional criado com sucesso.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: "Objeto dimensional adicionado com sucesso"
+                id: # UUID gerado
+                  type: string
+                  format: uuid
+                  example: "123e4567-e89b-12d3-a456-426614174000"
+                object_uri:
+                  type: string
+                  format: uri
+                  example: "http://localhost:3030/mydataset#123e4567-e89b-12d3-a456-426614174000"
+      400:
+        description: Dados de entrada inválidos (ex campos obrigatórios ausentes).
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error: {"type": "string", "example": "Invalid input"}
+                message: {"type": "string", "example": "Campo 'titulo' é obrigatório."}
+      500:
+        description: Erro interno no servidor ou falha na atualização SPARQL.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error: {"type": "string", "example": "SPARQL Update Error"}
+                message: {"type": "string", "example": "Detalhes do erro."}
+    """
+    data = request.get_json()
+    if not data: return jsonify({"error": "Invalid input", "message": "Request body cannot be empty"}), 400
 
-        coordenadas = data['coordenadas']
-        coord=''
-        if coordenadas:
-            lat, lon = coordenadas.split(',')
-            lat = lat.strip()
-            lon = lon.strip()
-            coord = f'geo:lat "{lat}";geo:lon "{lon}";'
-            
-        sparqapi_url = repo+'/'+load_config().get('update')
-       
-        
-            
-        tem_relacao_part = f':temRelacao {", ".join(f"<{relacao}>" for relacao in data["temRelacao"])}' if "temRelacao" in data and data["temRelacao"] else ''
-        associated_media_part = f'schema:associatedMedia {", ".join(f"<{url}>" for url in data["associatedMedia"])}' if "associatedMedia" in data and data["associatedMedia"] else ''
-        
-        descricao = '"""' + data["descricao"].replace('"""', '\\"""') + '"""'
-        resumo = '"""' + data["resumo"].replace('"""', '\\"""') + '"""'
-        titulo = '"""' + data["titulo"].replace('"""', '\\"""') + '"""'
-        # Montando a lista de partes da query
-        parts = [
-            f'dc:description {descricao}',
-            f'dc:abstract {resumo}',
-            f'dc:title {titulo}',
-            tem_relacao_part,
-            associated_media_part,
-        ]
-
-        # Remover partes vazias (strings vazias ou espaços em branco)
-        parts = [part for part in parts if part.strip()]
-
-        # Construção final da query SPARQL
-        sparql_query = f"""{get_prefix()}
-            PREFIX : <{repo}#>
-            INSERT DATA {{
-                {objeto_uri} rdf:type <{type}> ;
-                rdf:type obj:ObjetoDimensional ;
-                {coord}
-                obj:dimensao <{type}> ;
-                                { ' ;\n'.join(parts) } .
-            }}
-        """
-
-        print('->', sparql_query)  # Debugging
-        # Enviar a query SPARQL para o endpoint de atualização
-        headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-                   'Accept': 'application/sparql-results+json,*/*;q=0.9',
-                   'X-Requested-With': 'XMLHttpRequest'}
-        data = {'update': sparql_query}
-        encoded_data = urlencode(data)
-
-        response = requests.post(
-            sparqapi_url, headers=headers, data=encoded_data)
-
-        if response.status_code == 200:
-            return jsonify({"message": "Objeto digital adicionado com sucesso", "id": object_id}), 200
-        else:
-            print (response.text)
-            return jsonify({"error1": response.status_code, "message": response.text}), response.status_code
-
-    except requests.exceptions.RequestException as e:
-        return jsonify({"error2": "RequestException", "message": str(e)}), 500
-
-    except KeyError as e:
-        return jsonify({"error3": "KeyError", "message": str(e)}), 400
-
-    except Exception as e:
-        return jsonify({"error4": "Exception", "message": str(e)}), 500
-
-
-
-@dimapi_app.route('/delete', methods=['DELETE','POST'])
-@token_required
-def excluir():
-    try:
-        data = request.get_json()
-
-        if "id" not in data or "repository" not in data:
-            return jsonify({"error": "Invalid input", "message": "Expected JSON with 'id' and 'repository' fields"}), 400
-        
-        repo = data["repository"]
-        objeto_id = data["id"]
-        #print(objeto_id)
-        objeto_uri = f":{objeto_id}"
-        sparqapi_url = f"{repo}/{load_config().get('update')}"
-        
-        sparql_query = f"""{get_prefix()}
-            PREFIX : <{repo}#>
-            DELETE WHERE {{
-                {objeto_uri} ?p ?o .
-            }}
-        """
-        #print (sparql_query)
-        headers = {
-            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-            'Accept': 'application/sparql-results+json,*/*;q=0.9',
-            'X-Requested-With': 'XMLHttpRequest'
-        }
-
-        data = {'update': sparql_query}
-        encoded_data = urlencode(data)
-
-        response = requests.post(sparqapi_url, headers=headers, data=encoded_data)
-
-        if response.status_code == 200:
-            return jsonify({"message": "Objeto físico excluído com sucesso", "id": objeto_id}), 200
-        else:
-            #print(response.text)
-            return jsonify({"error1": response.status_code, "message": response.text}), response.status_code
-
-    except requests.exceptions.RequestException as e:
-        return jsonify({"error2": "RequestException", "message": str(e)}), 500
-
-    except KeyError as e:
-        return jsonify({"error3": "KeyError", "message": str(e)}), 400
-
-    except Exception as e:
-        return jsonify({"error4": "Exception", "message": str(e)}), 500
+    required_fields = ['titulo', 'resumo', 'tipo_uri', 'repository_update_url', 'repository_base_uri']
+    for field in required_fields:
+        if field not in data:
+            return jsonify({"error": "Invalid input", "message": f"Campo '{field}' é obrigatório."}), 400
     
-@dimapi_app.route('/remover_relacao', methods=['DELETE'])
-@token_required
-def remover_relacao():
-    try:
-        data = request.get_json()
+    sparql_update_url = data['repository_update_url']
+    repo_base_uri = data['repository_base_uri']
+    if not repo_base_uri.endswith(('#', '/')):
+        repo_base_uri += "#"
 
-        if "s" not in data or "p" not in data or "o" not in data or "repository" not in data:
-            return jsonify({"error": "Invalid input", "message": "Expected JSON with 's','p','o' and 'repository' fields"}), 400
-        
-        repo = data["repository"]
-        
-        s = data["s"]
-        p = data["p"]
-        o = data["s"]
-        
-        
-        sparqapi_url = f"{repo}/{load_config().get('update')}"
-        
-        sparql_query = f"""{get_prefix()}
-            PREFIX : <{repo}#>
-            DELETE WHERE {{
-                {s} {p} {o} .
-            }}
-        """
-        
-        headers = {
-            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-            'Accept': 'application/sparql-results+json,*/*;q=0.9',
-            'X-Requested-With': 'XMLHttpRequest'
-        }
-
-        data = {'update': sparql_query}
-        encoded_data = urlencode(data)
-
-        response = requests.post(sparqapi_url, headers=headers, data=encoded_data)
-
-        if response.status_code == 200:
-            return jsonify({"message": "relação excluído com sucessa", "id": '{s} {p} {o}'}), 200
-        else:
-            #print(response.text)
-            return jsonify({"error1": response.status_code, "message": response.text}), response.status_code
-
-    except requests.exceptions.RequestException as e:
-        return jsonify({"error2": "RequestException", "message": str(e)}), 500
-
-    except KeyError as e:
-        return jsonify({"error3": "KeyError", "message": str(e)}), 400
-
-    except Exception as e:
-        return jsonify({"error4": "Exception", "message": str(e)}), 500
+    object_id = str(uuid.uuid4())
+    objeto_uri_completa = f"<{repo_base_uri}{object_id}>"
     
+    tipo_obj_uri = f"<{data['tipo_uri']}>" # URI completa do tipo (ex: <http://...#Pessoa>)
+    
+    # Construção das partes da query
+    triples = [
+        f"{objeto_uri_completa} rdf:type {tipo_obj_uri}",
+        f"{objeto_uri_completa} rdf:type obj:ObjetoDimensional", # Superclasse genérica
+        f"{objeto_uri_completa} dc:title \"\"\"{data['titulo'].replace('"""', '\\"""')}\"\"\"",
+        f"{objeto_uri_completa} dc:abstract \"\"\"{data['resumo'].replace('"""', '\\"""')}\"\"\"" # Usando dc:abstract para resumo
+    ]
+    if data.get('descricao'):
+        triples.append(f"{objeto_uri_completa} dc:description \"\"\"{data['descricao'].replace('"""', '\\"""')}\"\"\"")
 
-@dimapi_app.route('/update', methods=['PUT', 'POST'])
-@token_required
-def update():
+    if data.get('coordenadas'):
+        try:
+            lat, lon = map(str.strip, data['coordenadas'].split(','))
+            triples.append(f"{objeto_uri_completa} geo:lat \"{lat}\"")
+            triples.append(f"{objeto_uri_completa} geo:long \"{lon}\"")
+        except ValueError:
+            return jsonify({"error": "Invalid input", "message": "Formato de 'coordenadas' inválido. Use 'latitude,longitude'."}), 400
+            
+    if data.get('temRelacao'):
+        for rel_uri in data['temRelacao']:
+            triples.append(f"{objeto_uri_completa} obj:temRelacao <{rel_uri}>") # Usando obj:temRelacao ou similar
+            
+    if data.get('associatedMedia'):
+        for media_uri in data['associatedMedia']:
+            triples.append(f"{objeto_uri_completa} schema:associatedMedia <{media_uri}>")
+
+    sparql_query = f"""{get_prefix()}
+        INSERT DATA {{
+            { ' .\n'.join(triples) } .
+        }}
+    """
+
+    headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+               'Accept': 'application/sparql-results+json,*/*;q=0.9',
+               'X-Requested-With': 'XMLHttpRequest'}
+    payload = {'update': sparql_query}
+    encoded_data = urlencode(payload)
+
     try:
-        data = request.get_json()
-        
-        # Validação básica dos campos obrigatórios
-        required_fields = ['descricao', 'titulo', 'resumo', 'id', 'repository', 'tipo']
-        for field in required_fields:
-            if field not in data:
-                return jsonify({"error": "Invalid input", "message": f"Expected JSON with '{field}' field"}), 400
+        response = requests.post(sparql_update_url, headers=headers, data=encoded_data)
+        if response.status_code == 200 or response.status_code == 204:
+            return jsonify({
+                "message": "Objeto dimensional adicionado com sucesso", 
+                "id": object_id,
+                "object_uri": objeto_uri_completa.strip("<>")
+            }), 201
+        else:
+            return jsonify({"error": "SPARQL Update Error", "message": response.text, "status_code": response.status_code}), response.status_code
+    except requests.exceptions.RequestException as e:
+        return jsonify({"error": "RequestException", "message": str(e)}), 500
+    except Exception as e:
+        return jsonify({"error": "Exception", "message": str(e)}), 500
 
-        # Captura dos dados
-        repo = data['repository']
-        description = data['descricao']
-        abstract = data['resumo']
-        titulo = data['titulo']
-        object_id = data['id']
-        objeto_uri = f":{object_id}"
-        sparqapi_url = repo + '/' + load_config().get('update')
-        coordenadas = data.get('coordenadas', None)
 
-        # Começa a construir o bloco SPARQL
-        delete_block = f"""
-            {objeto_uri} dc:description ?oldDescription ;
-                        dc:title ?oldTitle ;
-                        dc:abstract ?oldAbstract .
-        """
+@dimapi_app.route('/delete', methods=['DELETE','POST']) # Manter POST se necessário, DELETE é mais semântico
+@token_required
+def excluir_dimensional_object(): # Renomeado de 'excluir'
+    """
+    Exclui um objeto dimensional (ou qualquer objeto por URI) do repositório SPARQL.
+    ---
+    tags:
+      - Objetos Dimensionais
+    security:
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - object_uri_to_delete # Alterado de 'id' para 'object_uri_to_delete' para clareza
+              - repository_update_url
+              - repository_base_uri # Para construir a URI completa se apenas o ID local for passado
+            properties:
+              object_uri_to_delete:
+                type: string
+                format: uri # Ou apenas o ID local se repository_base_uri for usado para montá-la
+                description: "URI completa do objeto a ser excluído OU ID local se repository_base_uri for fornecida."
+                example: "http://localhost:3030/mydataset#123e4567-e89b-12d3-a456-426614174000"
+              repository_update_url:
+                type: string
+                format: uri
+                description: "URL do endpoint SPARQL de atualização."
+                example: "http://localhost:3030/mydataset/update"
+              repository_base_uri: # Opcional se object_uri_to_delete for sempre completa
+                type: string
+                format: uri
+                nullable: true
+                description: "URI base do repositório, usada se 'object_uri_to_delete' for um ID local."
+                example: "http://localhost:3030/mydataset#"
+    responses:
+      200:
+        description: Objeto excluído com sucesso.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message: {"type": "string", "example": "Objeto excluído com sucesso"}
+                object_uri: {"type": "string", "format": "uri", "example": "http://localhost:3030/mydataset#123e4567... "}
+      400:
+        description: Dados de entrada inválidos.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error: {"type": "string", "example": "Invalid input"}
+                message: {"type": "string", "example": "Campo 'object_uri_to_delete' é obrigatório."}
+      404: # Se o objeto não existir para ser deletado
+        description: Objeto não encontrado.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error: {"type": "string", "example": "Not Found"}
+                message: {"type": "string", "example": "Objeto não encontrado para exclusão."}
+      500:
+        description: Erro interno no servidor.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error: {"type": "string", "example": "SPARQL Update Error"}
+                message: {"type": "string"}
+    """
+    data = request.get_json()
+    if not data: return jsonify({"error": "Invalid input", "message": "Request body cannot be empty"}), 400
 
-        insert_block = f"""
-            {objeto_uri} 
-                dc:description \"\"\"{description}\"\"\";
-                dc:abstract \"\"\"{abstract}\"\"\";
-                dc:title \"\"\"{titulo}\"\"\" ;
-        """
+    object_identifier = data.get('object_uri_to_delete') # Pode ser URI completa ou ID local
+    sparql_update_url = data.get('repository_update_url')
+    repo_base_uri = data.get('repository_base_uri')
 
-        where_block = f"""
-            OPTIONAL {{ {objeto_uri} dc:description ?oldDescription . }}
-            OPTIONAL {{ {objeto_uri} dc:title ?oldTitle . }}
-            OPTIONAL {{ {objeto_uri} dc:abstract ?oldAbstract . }}
-        """
+    if not object_identifier or not sparql_update_url:
+        return jsonify({"error": "Invalid input", "message": "Campos 'object_uri_to_delete' e 'repository_update_url' são obrigatórios."}), 400
+    
+    # Construir URI completa se necessário
+    if "://" in object_identifier: # Heurística para checar se é uma URI completa
+        objeto_uri_sparql = f"<{object_identifier}>"
+    elif repo_base_uri:
+        if not repo_base_uri.endswith(('#', '/')):
+            repo_base_uri += "#"
+        objeto_uri_sparql = f"<{repo_base_uri}{object_identifier}>"
+    else:
+        return jsonify({"error": "Invalid input", "message": "Se 'object_uri_to_delete' for um ID local, 'repository_base_uri' é obrigatório."}), 400
 
-        # Se coordenadas existirem, adiciona no bloco SPARQL
-        if coordenadas:
+    # Query para deletar todas as triplas onde o objeto é sujeito E onde ele é objeto
+    # ATENÇÃO: Deletar onde é objeto pode ter efeitos colaterais amplos.
+    # A query original deletava apenas onde era sujeito: {objeto_uri} ?p ?o .
+    sparql_query = f"""
+        DELETE WHERE {{
+            {{ {objeto_uri_sparql} ?p ?o . }}
+            UNION
+            {{ ?s ?p_inv {objeto_uri_sparql} . }}
+        }}
+    """
+    # Se quiser manter a exclusão apenas das triplas onde o objeto é sujeito:
+    # sparql_query = f"""
+    #     DELETE WHERE {{
+    #         {objeto_uri_sparql} ?p ?o .
+    #     }}
+    # """
+
+    headers = {
+        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+        'Accept': 'application/sparql-results+json,*/*;q=0.9',
+        'X-Requested-With': 'XMLHttpRequest'
+    }
+    payload = {'update': sparql_query}
+    encoded_data = urlencode(payload)
+
+    try:
+        # Adicionar uma query ASK para verificar se o objeto existe antes de deletar, para retornar 404
+        response = requests.post(sparql_update_url, headers=headers, data=encoded_data)
+        if response.status_code == 200 or response.status_code == 204:
+            return jsonify({"message": "Objeto excluído com sucesso", "object_uri": objeto_uri_sparql.strip("<>")}), 200
+        else:
+            return jsonify({"error": "SPARQL Update Error", "message": response.text, "status_code": response.status_code}), response.status_code
+    except requests.exceptions.RequestException as e:
+        return jsonify({"error": "RequestException", "message": str(e)}), 500
+    except Exception as e:
+        return jsonify({"error": "Exception", "message": str(e)}), 500
+
+@dimapi_app.route('/remover_relacao', methods=['DELETE','POST']) # Manter POST se necessário
+@token_required
+def remover_relacao_dimensional(): # Renomeado de 'remover_relacao'
+    """
+    Remove uma relação RDF específica (tripla s-p-o) de um repositório SPARQL.
+    ---
+    tags:
+      - Objetos Dimensionais
+      - Relações
+    security:
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - s # Sujeito da tripla
+              - p # Predicado da tripla
+              - o # Objeto da tripla
+              - repository_update_url
+            properties:
+              s:
+                type: string
+                description: "URI completa do sujeito da tripla (ex <http://example.org/s1>)."
+                example: "<http://example.org/objeto/RecursoA>"
+              p:
+                type: string
+                description: "URI completa do predicado da tripla (ex <http://purl.org/dc/terms/relation>)."
+                example: "<http://schema.org/knows>"
+              o:
+                type: string
+                description: "URI completa ou Literal RDF do objeto da tripla (ex <http://example.org/o1> ou 'Literal')."
+                example: "<http://example.org/pessoa/PessoaB>"
+              repository_update_url:
+                type: string
+                format: uri
+                description: "URL do endpoint SPARQL de atualização."
+                example: "http://localhost:3030/mydataset/update"
+    responses:
+      200:
+        description: Relação removida com sucesso.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message: {"type": "string", "example": "Relação excluída com sucesso"}
+                triple: {"type": "string", "example": "<http://example.org/s1> <http://purl.org/dc/terms/title> Título"}
+      400:
+        description: Dados de entrada inválidos.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error: {"type": "string", "example": "Invalid input"}
+                message: {"type": "string", "example": "Campos 's', 'p', 'o' e 'repository_update_url' são obrigatórios."}
+      500:
+        description: Erro interno no servidor.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error: {"type": "string", "example": "SPARQL Update Error"}
+                message: {"type": "string"}
+    """
+    data = request.get_json()
+    if not data: return jsonify({"error": "Invalid input", "message": "Request body cannot be empty"}), 400
+
+    s = data.get('s') # Espera-se URI completa ou literal formatado (ex: <uri> ou "literal"^^xsd:string)
+    p = data.get('p') # Espera-se URI completa (ex: <uri>)
+    o = data.get('o') # Espera-se URI completa ou literal formatado
+    sparql_update_url = data.get('repository_update_url')
+
+    if not all([s, p, o, sparql_update_url]):
+        return jsonify({"error": "Invalid input", "message": "Campos 's', 'p', 'o' e 'repository_update_url' são obrigatórios."}), 400
+    
+    # Validação básica se s, p, o parecem URIs ou literais bem formados (simplificado)
+    # Idealmente, o cliente envia a tripla já formatada para SPARQL.
+    # Ex: s = "<http://example.org/res/1>", p = "<http://example.org/prop/rel>", o = "\"Some Value\"@en"
+
+    sparql_query = f"""
+        DELETE DATA {{
+            {s} {p} {o} .
+        }}
+    """
+    # Nota: DELETE DATA é mais específico que DELETE WHERE { {s} {p} {o} } se a tripla exata é conhecida.
+    # Se houver variáveis ou a tripla não for exata, DELETE WHERE é mais flexível.
+    # A query original usava DELETE WHERE. Para consistência com isso:
+    # sparql_query = f"""
+    #     DELETE WHERE {{
+    #         {s} {p} {o} .
+    #     }}
+    # """
+    
+    headers = {
+        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+        'Accept': 'application/sparql-results+json,*/*;q=0.9',
+        'X-Requested-With': 'XMLHttpRequest'
+    }
+    payload = {'update': sparql_query}
+    encoded_data = urlencode(payload)
+
+    try:
+        response = requests.post(sparql_update_url, headers=headers, data=encoded_data)
+        if response.status_code == 200 or response.status_code == 204:
+            return jsonify({"message": "Relação excluída com sucesso", "triple": f"{s} {p} {o}"}), 200
+        else:
+            return jsonify({"error": "SPARQL Update Error", "message": response.text, "status_code": response.status_code}), response.status_code
+    except requests.exceptions.RequestException as e:
+        return jsonify({"error": "RequestException", "message": str(e)}), 500
+    except Exception as e:
+        return jsonify({"error": "Exception", "message": str(e)}), 500
+
+@dimapi_app.route('/update', methods=['PUT', 'POST']) # PUT é mais semântico para update completo
+@token_required
+def update_dimensional_object(): # Renomeado de 'update'
+    """
+    Atualiza os metadados de um objeto dimensional existente.
+    ---
+    tags:
+      - Objetos Dimensionais
+    security:
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - object_uri_to_update # URI completa do objeto a ser atualizado
+              - titulo
+              - resumo
+              # tipo_uri não é alterado aqui, mas poderia ser se necessário
+              - repository_update_url
+            properties:
+              object_uri_to_update:
+                type: string
+                format: uri
+                description: "URI completa do objeto dimensional a ser atualizado."
+                example: "http://localhost:3030/mydataset#123e4567-e89b-12d3-a456-426614174000"
+              titulo:
+                type: string
+                description: "Novo título para o objeto."
+                example: "João Silva (Revisado)"
+              resumo:
+                type: string
+                description: "Novo resumo para o objeto."
+                example: "Historiador local, com foco em tradições orais."
+              descricao:
+                type: string
+                nullable: true
+                description: "Nova descrição detalhada (opcional)."
+                example: "Após novas pesquisas, a descrição foi expandida."
+              coordenadas:
+                type: string
+                nullable: true
+                description: "Novas coordenadas 'latitude,longitude' (opcional, aplicável a Lugares)."
+                example: "-16.3290,-48.9540"
+              # Adicionar temRelacao e associatedMedia se a atualização deles for suportada por este endpoint
+              repository_update_url:
+                type: string
+                format: uri
+                description: "URL do endpoint SPARQL de atualização."
+                example: "http://localhost:3030/mydataset/update"
+    responses:
+      200:
+        description: Objeto atualizado com sucesso.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message: {"type": "string", "example": "Objeto atualizado com sucesso"}
+                object_uri: {"type": "string", "format": "uri", "example": "http://localhost:3030/mydataset#123e4567..."}
+      400:
+        description: Dados de entrada inválidos.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error: {"type": "string", "example": "Invalid input"}
+                message: {"type": "string", "example": "Campo 'object_uri_to_update' é obrigatório."}
+      404:
+        description: Objeto não encontrado para atualização.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error: {"type": "string", "example": "Not Found"}
+                message: {"type": "string", "example": "Objeto não encontrado."}
+      500:
+        description: Erro interno no servidor.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error: {"type": "string", "example": "SPARQL Update Error"}
+                message: {"type": "string"}
+    """
+    data = request.get_json()
+    if not data: return jsonify({"error": "Invalid input", "message": "Request body cannot be empty"}), 400
+
+    object_uri = data.get('object_uri_to_update')
+    sparql_update_url = data.get('repository_update_url')
+
+    if not all([object_uri, sparql_update_url, data.get('titulo'), data.get('resumo')]):
+        return jsonify({"error": "Invalid input", "message": "Campos 'object_uri_to_update', 'repository_update_url', 'titulo' e 'resumo' são obrigatórios."}), 400
+
+    obj_uri_sparql = f"<{object_uri}>"
+    
+    # Construção dos blocos DELETE e INSERT
+    delete_clauses = []
+    insert_clauses = [
+        f"{obj_uri_sparql} dc:title \"\"\"{data['titulo'].replace('"""', '\\"""')}\"\"\"",
+        f"{obj_uri_sparql} dc:abstract \"\"\"{data['resumo'].replace('"""', '\\"""')}\"\"\""
+    ]
+    where_clauses = [f"OPTIONAL {{ {obj_uri_sparql} dc:title ?oldTitle . }}",
+                     f"OPTIONAL {{ {obj_uri_sparql} dc:abstract ?oldAbstract . }}"] # dc:abstract para resumo
+
+    # Campos opcionais para atualização
+    if 'descricao' in data: # Permite remover descrição se "" for passado, ou atualizar
+        delete_clauses.append(f"{obj_uri_sparql} dc:description ?oldDescription .")
+        where_clauses.append(f"OPTIONAL {{ {obj_uri_sparql} dc:description ?oldDescription . }}")
+        if data['descricao'] is not None and data['descricao'].strip() != "":
+             insert_clauses.append(f"{obj_uri_sparql} dc:description \"\"\"{data['descricao'].replace('"""', '\\"""')}\"\"\"")
+        # Se data['descricao'] for "" ou None, a descrição antiga é removida e nenhuma nova é inserida.
+
+    if 'coordenadas' in data:
+        delete_clauses.extend([f"{obj_uri_sparql} geo:lat ?oldLat .", f"{obj_uri_sparql} geo:long ?oldLong ."])
+        where_clauses.extend([f"OPTIONAL {{ {obj_uri_sparql} geo:lat ?oldLat . }}", f"OPTIONAL {{ {obj_uri_sparql} geo:long ?oldLong . }}"])
+        if data['coordenadas'] is not None and data['coordenadas'].strip() != "":
             try:
-                lat, lon = coordenadas.split(',')
-                lat = lat.strip()
-                lon = lon.strip()
-
-                delete_block += f"""
-                    {objeto_uri} geo:lat ?oldLat ;
-                                geo:long ?oldLong .
-                """
-                insert_block += f"""
-                    geo:lat \"\"\"{lat}\"\"\" ;
-                    geo:long \"\"\"{lon}\"\"\" .
-                """
-                where_block += f"""
-                    OPTIONAL {{ {objeto_uri} geo:lat ?oldLat . }}
-                    OPTIONAL {{ {objeto_uri} geo:long ?oldLong . }}
-                """
+                lat, lon = map(str.strip, data['coordenadas'].split(','))
+                insert_clauses.extend([f"{obj_uri_sparql} geo:lat \"{lat}\"", f"{obj_uri_sparql} geo:long \"{lon}\""])
             except ValueError:
-                print("Coordenadas mal formatadas. Ignorando coordenadas.")
+                return jsonify({"error": "Invalid input", "message": "Formato de 'coordenadas' inválido. Use 'latitude,longitude'."}), 400
+        # Se data['coordenadas'] for "" ou None, as coordenadas antigas são removidas.
 
-        # Finaliza SPARQL
-        sparql_query = f"""{get_prefix()}
-PREFIX : <{repo}#>
+    delete_block = "\n".join(delete_clauses)
+    insert_block = " ;\n".join(insert_clauses) # Junta as triplas de insert com ;
+    where_block = "\n".join(where_clauses)
 
-DELETE {{
-    {delete_block}
-}}
-INSERT {{
-    {insert_block}
-}}
-WHERE {{
-    {where_block}
-}}
-"""
+    sparql_query = f"""{get_prefix()}
+        DELETE {{
+            {delete_block}
+        }}
+        INSERT {{
+            {insert_block} .
+        }}
+        WHERE {{
+            {obj_uri_sparql} ?anyProp ?anyVal . # Garante que o objeto existe para aplicar o WHERE nos OPTIONALs
+            {where_block}
+        }}
+    """
+    
+    headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+               'Accept': 'application/sparql-results+json,*/*;q=0.9',
+               'X-Requested-With': 'XMLHttpRequest'}
+    payload = {'update': sparql_query}
+    encoded_data = urlencode(payload)
 
-        print('SPARQL UPDATE:', sparql_query)
-
-        # Headers e envio da requisição
-        headers = {
-            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-            'Accept': 'application/sparql-results+json,*/*;q=0.9',
-            'X-Requested-With': 'XMLHttpRequest'
-        }
-        data_envio = {'update': sparql_query}
-        encoded_data = urlencode(data_envio)
-
-        response = requests.post(sparqapi_url, headers=headers, data=encoded_data)
-
-        if response.status_code == 200:
-            return jsonify({"message": "Objeto atualizado com sucesso", "id": object_id}), 200
+    try:
+        # Adicionar query ASK para verificar se o objeto existe antes, para retornar 404
+        response = requests.post(sparql_update_url, headers=headers, data=encoded_data)
+        if response.status_code == 200 or response.status_code == 204:
+            return jsonify({"message": "Objeto atualizado com sucesso", "object_uri": object_uri}), 200
         else:
-            return jsonify({"error": response.status_code, "message": response.text}), response.status_code
-
+            return jsonify({"error": "SPARQL Update Error", "message": response.text, "status_code": response.status_code}), response.status_code
+    except requests.exceptions.RequestException as e:
+        return jsonify({"error": "RequestException", "message": str(e)}), 500
     except Exception as e:
         return jsonify({"error": "Exception", "message": str(e)}), 500
 
 
 @dimapi_app.route('/update_old', methods=['PUT','POST'])
 @token_required
-def update_old():
+def update_dimensional_object_old(): # Renomeado de 'update_old'
+    """
+    (Versão Antiga/Simplificada) Atualiza descrição, título e resumo de um objeto.
+    Considere usar o endpoint /update para uma atualização mais completa.
+    ---
+    tags:
+      - Objetos Dimensionais
+      - Deprecated
+    deprecated: true # Marcando como deprecated
+    security:
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - id # ID local do objeto
+              - descricao
+              - titulo
+              - resumo
+              - repository_update_url
+              - repository_base_uri # Para construir a URI completa do objeto
+            properties:
+              id:
+                type: string
+                description: "ID local do objeto a ser atualizado."
+                example: "123e4567-e89b-12d3-a456-426614174000"
+              descricao:
+                type: string
+                example: "Descrição atualizada do objeto."
+              titulo:
+                type: string
+                example: "Título Atualizado"
+              resumo:
+                type: string
+                example: "Resumo atualizado."
+              repository_update_url:
+                type: string
+                format: uri
+                example: "http://localhost:3030/mydataset/update"
+              repository_base_uri:
+                type: string
+                format: uri
+                example: "http://localhost:3030/mydataset#"
+              # 'tipo' e 'coordenadas' do request original não são usados na query SPARQL deste endpoint.
+    responses:
+      200:
+        description: Objeto atualizado com sucesso (versão antiga).
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message: {"type": "string", "example": "Objeto atualizado com sucesso"}
+                id: {"type": "string", "example": "123e4567-e89b-12d3-a456-426614174000"}
+      400:
+        description: Dados de entrada inválidos.
+      404:
+        description: Objeto não encontrado.
+      500:
+        description: Erro interno no servidor.
+    """
+    data = request.get_json()
+    if not data: return jsonify({"error": "Invalid input", "message": "Request body cannot be empty"}), 400
+
+    required_fields = ['id', 'descricao', 'titulo', 'resumo', 'repository_update_url', 'repository_base_uri']
+    for field in required_fields:
+        if field not in data:
+            return jsonify({"error": "Invalid input", "message": f"Campo '{field}' é obrigatório."}), 400
+    
+    object_id_local = data['id']
+    sparql_update_url = data['repository_update_url']
+    repo_base_uri = data['repository_base_uri']
+    if not repo_base_uri.endswith(('#', '/')):
+        repo_base_uri += "#"
+    
+    objeto_uri_sparql = f"<{repo_base_uri}{object_id_local}>"
+    
+    description_val = data['descricao'].replace('"""', '\\"""')
+    abstract_val = data['resumo'].replace('"""', '\\"""') # dc:abstract para resumo
+    title_val = data['titulo'].replace('"""', '\\"""')
+
+    sparql_query = f"""{get_prefix()}
+        DELETE {{
+            {objeto_uri_sparql} dc:description ?oldDescription; 
+                               dc:title ?oldTitle;
+                               dc:abstract ?oldAbstract.
+        }}
+        INSERT {{
+            {objeto_uri_sparql} dc:description \"\"\"{description_val}\"\"\";
+                               dc:title \"\"\"{title_val}\"\"\";
+                               dc:abstract \"\"\"{abstract_val}\"\"\" .
+        }}
+        WHERE {{
+            {objeto_uri_sparql} ?anyProp ?anyVal . # Garante que o objeto existe
+            OPTIONAL {{ {objeto_uri_sparql} dc:description ?oldDescription . }}
+            OPTIONAL {{ {objeto_uri_sparql} dc:title ?oldTitle . }}
+            OPTIONAL {{ {objeto_uri_sparql} dc:abstract ?oldAbstract . }}
+        }}
+    """
+    headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+               'Accept': 'application/sparql-results+json,*/*;q=0.9',
+               'X-Requested-With': 'XMLHttpRequest'}
+    payload = {'update': sparql_query}
+    encoded_data = urlencode(payload)
     try:
-        data = request.get_json()
-        
-        if "id" not in data:
-            return jsonify({"error": "Invalid input", "message": "Expected JSON with 'id' field"}), 400
-
-        required_fields = ['descricao', 'titulo', 'resumo','id','repository','tipo']
-        
-        for field in required_fields:
-            if field not in data:
-                return jsonify({"error": "Invalid input", "message": f"Expected JSON with '{field}' field"}), 400
-        
-        repo = data['repository']
-        description=data['descricao']
-        abstract=data['resumo']
-        titulo=data['titulo']
-        object_id = data['id']
-        objeto_uri = f":{object_id}"
-        sparqapi_url = repo+'/'+load_config().get('update')
-        coordenadas = data['coordenadas']
-        
-
-        sparql_query = f"""{get_prefix()}
-            PREFIX : <{repo}#>
-            DELETE {{
-                {objeto_uri} dc:description ?oldDescription; dc:title ?oldTitle  ;
-                dc:title ?oldTitle  ;
-                dc:abstract ?oldAbstract.
-            }}
-            INSERT {{
-                {objeto_uri} 
-                    dc:description "{description}";
-                    dc:abstract "{abstract}";
-                    dc:title "{titulo}" .
-            }}
-            WHERE {{
-                {objeto_uri}  dc:title ?oldTitle ;
-                dc:description ?oldDescription ;
-                dc:abstract ?oldAbstract.
-            }}
-        """
-        print('update',sparql_query)   
-        headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-                'Accept': 'application/sparql-results+json,*/*;q=0.9',
-                'X-Requested-With': 'XMLHttpRequest'}
-        data = {'update': sparql_query}
-        encoded_data = urlencode(data)
-         
-        response = requests.post(
-            sparqapi_url, headers=headers, data=encoded_data)
-
-        if response.status_code == 200:
-            return jsonify({"message": "Objeto atualizado com sucesso", "id": object_id}), 200
+        response = requests.post(sparql_update_url, headers=headers, data=encoded_data)
+        if response.status_code == 200 or response.status_code == 204:
+            return jsonify({"message": "Objeto atualizado com sucesso", "id": object_id_local}), 200
         else:
-            return jsonify({"error": response.status_code, "message": response.text}), response.status_code
-
-        #return jsonify({"message": "Nenhuma alteração enviada"}), 400
-
+            return jsonify({"error": "SPARQL Update Error", "message": response.text, "status_code": response.status_code}), response.status_code
+    except requests.exceptions.RequestException as e:
+        return jsonify({"error": "RequestException", "message": str(e)}), 500
     except Exception as e:
         return jsonify({"error": "Exception", "message": str(e)}), 500
-    
 
 @dimapi_app.route('/add_relation', methods=['POST'])
 @token_required
-def add_relation():
-    try:
-        data = request.get_json()
-        objeto = data["o"]
-        repositorio = data["repositorio_uri"]
-        midia = data["midia_uri"]
-        propriedade = data["propriedade"]
-        repo = data['repository']
-        sparqapi_url = repo+'/'+load_config().get('update')
-        sparql_query = f"""{get_prefix()}
-        PREFIX : <{repo}#>
+def add_relation_dimensional(): # Renomeado de 'add_relation'
+    """
+    Adiciona uma relação RDF entre um objeto dimensional (sujeito) e outro recurso (objeto).
+    ---
+    tags:
+      - Objetos Dimensionais
+      - Relações
+    security:
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - s # Sujeito URI
+              - p # Predicado URI
+              - o # Objeto URI ou Literal
+              - repository_update_url
+            properties:
+              s:
+                type: string
+                format: uri # Espera-se URI completa <...>
+                description: "URI completa do objeto sujeito da relação."
+                example: "<http://localhost:3030/mydataset#ObjetoA>"
+              p:
+                type: string
+                format: uri # Espera-se URI completa <...>
+                description: "URI completa da propriedade (predicado) da relação."
+                example: "<http://schema.org/relatedTo>"
+              o:
+                type: string
+                # Pode ser URI ou Literal. Se literal, deve ser formatado (ex "Texto" ou "10"^^xsd:integer)
+                description: "URI completa do objeto da relação ou um Literal RDF."
+                example: "<http://localhost:3030/mydataset#ObjetoB>"
+              repository_update_url:
+                type: string
+                format: uri
+                description: "URL do endpoint SPARQL de atualização."
+                example: "http://localhost:3030/mydataset/update"
+              # 'repositorio_uri' do request original não é usado na query, apenas 'repository_update_url' (que era 'repo')
+    responses:
+      201: # Mudado para 201 Created, pois uma nova relação é criada
+        description: Relação adicionada com sucesso.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message: {"type": "string", "example": "Relação adicionada com sucesso"}
+                triple: {"type": "string", "example": "<subj> <pred> <obj> ."}
+      400:
+        description: Dados de entrada inválidos.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error: {"type": "string", "example": "Invalid input"}
+                message: {"type": "string", "example": "Campo 's' (sujeito) é obrigatório."}
+      500:
+        description: Erro interno no servidor.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error: {"type": "string", "example": "SPARQL Update Error"}
+    """
+    data = request.get_json()
+    if not data: return jsonify({"error": "Invalid input", "message": "Request body cannot be empty"}), 400
+
+    # No request original, os campos eram "o" (para sujeito), "midia_uri" (para objeto), "propriedade", "repositorio_uri", "repository"
+    # Mapeando para s, p, o para clareza semântica de triplas RDF
+    sujeito = data.get('s') # URI do sujeito
+    predicado = data.get('p') # URI da propriedade
+    objeto_rdf = data.get('o') # URI ou Literal do objeto
+    sparql_update_url = data.get('repository_update_url')
+
+    if not all([sujeito, predicado, objeto_rdf, sparql_update_url]):
+        return jsonify({"error": "Invalid input", "message": "Campos 's', 'p', 'o', e 'repository_update_url' são obrigatórios."}), 400
+
+    # Assume que s, p, o já estão formatados corretamente para SPARQL (ex: <uri> ou "literal"^^<datatype>)
+    sparql_query = f"""{get_prefix()}
         INSERT DATA {{
-        {objeto} {propriedade} {midia} .
+            {sujeito} {predicado} {objeto_rdf} .
         }}
-        """
-        #print('add relação:',sparql_query, ' no repositório ', sparqapi_url)
-        headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-                   'Accept': 'application/sparql-results+json,*/*;q=0.9',
-                   'X-Requested-With': 'XMLHttpRequest'}
-        data = {'update': sparql_query}
-        encoded_data = urlencode(data)
+    """
+    headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+               'Accept': 'application/sparql-results+json,*/*;q=0.9',
+               'X-Requested-With': 'XMLHttpRequest'}
+    payload = {'update': sparql_query}
+    encoded_data = urlencode(payload)
 
-        response = requests.post(
-            sparqapi_url, headers=headers, data=encoded_data)
-
-        if response.status_code == 200:
-            return jsonify({"message": "Objeto digital adicionado com sucesso", "id": objeto}), 200
+    try:
+        response = requests.post(sparql_update_url, headers=headers, data=encoded_data)
+        if response.status_code == 200 or response.status_code == 204:
+            return jsonify({"message": "Relação adicionada com sucesso", "triple": f"{sujeito} {predicado} {objeto_rdf} ."}), 201
         else:
-            #print (response.text)
-            return jsonify({"error1": response.status_code, "message": response.text}), response.status_code
-
+            return jsonify({"error": "SPARQL Update Error", "message": response.text, "status_code": response.status_code}), response.status_code
     except requests.exceptions.RequestException as e:
-        return jsonify({"error2": "RequestException", "message": str(e)}), 500
-
-    except KeyError as e:
-        return jsonify({"error3": "KeyError", "message": str(e)}), 400
-
+        return jsonify({"error": "RequestException", "message": str(e)}), 500
     except Exception as e:
-        return jsonify({"error4": "Exception", "message": str(e)}), 500
+        return jsonify({"error": "Exception", "message": str(e)}), 500
+
