@@ -1,54 +1,64 @@
-from flask import Blueprint, request, jsonify, current_app # Adicionado current_app para logging
-import requests
-from consultas import get_sparq_repo # get_prefix não é usado diretamente nos endpoints
+from flask import Blueprint, request, jsonify, current_app, g # Importado 'g' para acessar user_uri
+# Importar as funções refatoradas de utils.py
+from utils import execute_sparql_query, execute_sparql_update
+from consultas import get_sparq_repo
 from config_loader import load_config
-from urllib.parse import urlencode
-# token_required não é usado neste blueprint específico
+from urllib.parse import urlencode # Ainda necessário para form_payload em criar_dataset_fuseki
+from blueprints.auth import token_required # Importar o decorador de token
 
 repo_app = Blueprint('repo_app', __name__)
+
+# Carregar a configuração globalmente para o módulo
+config = load_config('config.json')
+FUSEKI_URL = config.get('fuseki_url')
+REPO_QUERY_URL = config.get('repo_query_url')
+REPO_UPDATE_URL = config.get('repo_update_url')
+USER_QUERY_URL = config.get('user_query_url') # Necessário para buscar repositórios do usuário
 
 # Função auxiliar, não é um endpoint HTTP
 def obter_repositorio_por_nome(name):
     """
     Obtém os detalhes de um repositório específico pelo seu nome.
-    Esta função chama internamente o endpoint /listar_repositorios.
+    Esta função agora realiza a consulta SPARQL diretamente.
     """
-    # Para evitar dependência cíclica ou chamadas HTTP internas desnecessárias em produção,
-    # esta função deveria idealmente realizar a consulta SPARQL diretamente
-    # ou ser refatorada se /listar_repositorios for a única fonte.
-    # Por ora, mantendo a lógica original de chamar o endpoint.
-    
-    # Constrói a URL para o endpoint listar_repositorios.
-    # Isso assume que o app está rodando e acessível.
-    # Em um cenário real, seria melhor ter uma função de serviço que faz a query.
     try:
-        # Esta é uma chamada HTTP interna, o que pode não ser ideal.
-        # Seria melhor ter uma função que executa a lógica de consulta diretamente.
-        listar_url = request.url_root.rstrip('/') + '/repositorios/listar_repositorios'
-        response = requests.get(listar_url, params={'name': name}, timeout=5) # Adicionado timeout
-        response.raise_for_status() # Levanta erro para status 4xx/5xx
-        
-        repositorios_data = response.json()
+        if not REPO_QUERY_URL:
+            current_app.logger.error("Configuração 'repo_query_url' não encontrada para obter_repositorio_por_nome.")
+            return None
 
-        if "results" in repositorios_data and "bindings" in repositorios_data["results"]:
-            for repo_binding in repositorios_data["results"]["bindings"]:
-                # A query original em get_sparq_repo() já filtra pelo nome se fornecido.
-                # Esta verificação adicional pode ser redundante se a query SPARQL for eficiente.
+        # Vamos construir o filtro aqui para maior clareza:
+        filtro_sparql = ''
+        if name:
+            nome_escaped = name.replace('"', '\\"')
+            # Ajustado para usar o placeholder %keyword% em get_sparq_repo
+            filtro_sparql = f'FILTER(LCASE(STR(?nome)) = LCASE("{nome_escaped}"))'
+
+        sparql_query_template = get_sparq_repo()
+        # Assume que get_sparq_repo() tem um placeholder para o filtro.
+        # Se não tiver, você precisará modificar get_sparq_repo() ou injetar o filtro de outra forma.
+        sparql_query = sparql_query_template.replace("%filter_aqui%", filtro_sparql) # Usar um placeholder distinto
+
+        current_app.logger.debug(f"SPARQL query para obter_repositorio_por_nome: {sparql_query}")
+
+        # Usando execute_sparql_query de utils.py
+        results = execute_sparql_query(REPO_QUERY_URL, sparql_query)
+
+        if "results" in results and "bindings" in results["results"]:
+            for repo_binding in results["results"]["bindings"]:
                 if repo_binding.get("nome", {}).get("value", "").lower() == name.lower():
                     return {
                         "nome": repo_binding.get("nome", {}).get("value"),
-                        "uri": repo_binding.get("uri", {}).get("value"), # No SPARQL original é ?uri, não ?s
+                        "uri": repo_binding.get("uri", {}).get("value"),
                         "contato": repo_binding.get("contato", {}).get("value"),
                         "descricao": repo_binding.get("descricao", {}).get("value"),
                         "responsavel": repo_binding.get("responsavel", {}).get("value")
                     }
-    except requests.exceptions.RequestException as e:
-        current_app.logger.error(f"Erro ao chamar /listar_repositorios internamente em obter_repositorio_por_nome: {e}")
-        return None
+    except Exception as e:
+        current_app.logger.error(f"Erro ao obter repositório por nome: {str(e)}")
     return None
 
 @repo_app.route('/listar_repositorios', methods=['GET'])
-def listar_repositorios_endpoint(): # Renomeado de listar_repositorios para evitar conflito
+def listar_repositorios_endpoint():
     """
     Lista os repositórios de metadados disponíveis.
     Pode-se filtrar por um nome específico de repositório.
@@ -68,7 +78,7 @@ def listar_repositorios_endpoint(): # Renomeado de listar_repositorios para evit
         description: Lista de repositórios retornada com sucesso.
         content:
           application/json:
-            schema: # Schema para resultado JSON SPARQL padrão
+            schema:
               type: object
               properties:
                 head:
@@ -87,9 +97,27 @@ def listar_repositorios_endpoint(): # Renomeado de listar_repositorios para evit
                       items:
                         type: object
                         properties:
-                          uri: {"type": "object", "properties": {"type": {"type": "string", "example": "uri"}, "value": {"type": "string", "format": "uri", "example": "http://example.org/repo/Repo1"}}}
-                          nome: {"type": "object", "properties": {"type": {"type": "string", "example": "literal"}, "value": {"type": "string", "example": "Repositório 1"}}}
-                          # Adicionar outras vars conforme a query get_sparq_repo
+                          # CORREÇÃO AQUI: Removendo o 'type: object' aninhado desnecessariamente e a chave '}}}' extra.
+                          # E garantindo a sintaxe YAML correta para dicionários e aninhamento.
+                          uri:
+                            type: object
+                            properties:
+                              type:
+                                type: string
+                                example: "uri"
+                              value:
+                                type: string
+                                format: uri
+                                example: "http://example.org/repo/Repo1"
+                          nome:
+                            type: object
+                            properties:
+                              type:
+                                type: string
+                                example: "literal"
+                              value:
+                                type: string
+                                example: "Repositório 1"
       400:
         description: Erro na requisição (ex falha ao carregar configuração).
         content:
@@ -111,62 +139,38 @@ def listar_repositorios_endpoint(): # Renomeado de listar_repositorios para evit
     """
     try:
         nome_filtro = request.args.get('name', default=None, type=str)
-        
-        # A query get_sparq_repo() já tem um placeholder %filter%
-        # A lógica de filtro deve ser aplicada na query SPARQL, não depois.
-        # O placeholder %filter% na query original é problemático se 'nome' não for fornecido.
-        # Ajustando a query em consultas.py ou a lógica aqui é necessário.
-        # Assumindo que get_sparq_repo() lida com %filter% corretamente (ex: tornando-o vazio se nome_filtro for None)
 
-        # Vamos construir o filtro aqui para maior clareza:
-        filtro_sparql = ''
-        if nome_filtro:
-            # Escapar aspas no nome_filtro para segurança na query
-            nome_escaped = nome_filtro.replace('"', '\\"')
-            filtro_sparql = f'FILTER(LCASE(STR(?nome)) = LCASE("{nome_escaped}"))'
-            # Ou, se a query já espera um nome exato:
-            # filtro_sparql = f'FILTER(?nome = "{nome_escaped}"^^xsd:string)'
-
-
-        cfg = load_config()
-        sparqapi_url = cfg.get('repo_query_url')
-        if not sparqapi_url:
-            current_app.logger.error("Configuração 'repo_query_url' não encontrada.")
+        if not REPO_QUERY_URL:
+            current_app.logger.error("Configuração 'repo_query_url' não encontrada para listar_repositorios_endpoint.")
             return jsonify({"error": "Configuration Error", "message": "Endpoint de query de repositório não configurado."}), 500
 
-        # Modificar a query para usar o filtro construído
-        sparql_query_template = get_sparq_repo() # Espera-se que tenha um SELECT ... WHERE { ... %filtro_aqui% ... }
-        sparql_query = sparql_query_template.replace("%filter_aqui%", filtro_sparql) # Usar um placeholder distinto
-        
-        current_app.logger.debug(f"SPARQL query para listar repositórios: {sparql_query}")
-        headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-                   'Accept': 'application/sparql-results+json,*/*;q=0.9',
-                   'X-Requested-With': 'XMLHttpRequest'}
-        data_payload = {'query': sparql_query}
-        encoded_data = urlencode(data_payload)
+        filtro_sparql = ''
+        if nome_filtro:
+            nome_escaped = nome_filtro.replace('"', '\\"')
+            filtro_sparql = f'FILTER(LCASE(STR(?nome)) = LCASE("{nome_escaped}"))'
 
-        response = requests.post(sparqapi_url, headers=headers, data=encoded_data, timeout=10)
-        response.raise_for_status()
-        
-        result = response.json()
+        sparql_query_template = get_sparq_repo()
+        sparql_query = sparql_query_template.replace("%filter_aqui%", filtro_sparql)
+
+        current_app.logger.debug(f"SPARQL query para listar repositórios: {sparql_query}")
+
+        result = execute_sparql_query(REPO_QUERY_URL, sparql_query)
         return jsonify(result)
 
-    except requests.exceptions.HTTPError as http_err:
-        current_app.logger.error(f"Erro HTTP na query SPARQL (listar_repositorios): {http_err} - Response: {response.text}")
-        return jsonify({"error": f"SPARQL query failed", "message": response.text, "status_code": response.status_code}), response.status_code
-    except requests.exceptions.RequestException as e:
-        current_app.logger.error(f"RequestException em listar_repositorios: {str(e)}")
-        return jsonify({"error": "RequestException", "message": str(e)}), 500
-    except KeyError as e: # Para erros de config
-        current_app.logger.error(f"KeyError em listar_repositorios (configuração?): {str(e)}")
-        return jsonify({"error": "Configuration Error", "message": f"Chave de configuração ausente: {str(e)}"}), 400
     except Exception as e:
-        current_app.logger.error(f"Erro inesperado em listar_repositorios: {str(e)}")
-        return jsonify({"error": "Exception", "message": str(e)}), 500
+        current_app.logger.error(f"Erro em listar_repositorios_endpoint: {str(e)}")
+        if hasattr(e, 'args') and len(e.args) > 1 and isinstance(e.args[0], str) and "status" in e.args[0]:
+            status_code = int(e.args[0].split("status ")[1].split(" ")[0])
+            message = e.args[1]
+            return jsonify({"error": "SPARQL Query Error", "message": message}), status_code
+        elif "Network error" in str(e):
+            return jsonify({"error": "Network Error", "message": str(e)}), 500
+        else:
+            return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 
 @repo_app.route('/adicionar_repo', methods=['POST'])
-def adicionar_repo_endpoint(): # Renomeado de adicionar_repo
+def adicionar_repo_endpoint():
     """
     Adiciona uma nova definição de repositório ao grafo de metadados.
     Esta operação cria um recurso :RepoID rdf:type owl:Class com as propriedades fornecidas.
@@ -180,7 +184,7 @@ def adicionar_repo_endpoint(): # Renomeado de adicionar_repo
           schema:
             type: object
             required:
-              - id_local_repo # Renomeado de 'uri' para clareza
+              - id_local_repo
               - nome
               - contato
               - descricao
@@ -196,7 +200,7 @@ def adicionar_repo_endpoint(): # Renomeado de adicionar_repo
                 example: "Repositório de Fotografias Históricas da Cidade"
               contato:
                 type: string
-                format: email # Ou string genérica se não for sempre email
+                format: email
                 description: Informação de contato para o repositório.
                 example: "contato@fotohistorica.org"
               descricao:
@@ -222,7 +226,7 @@ def adicionar_repo_endpoint(): # Renomeado de adicionar_repo
                   type: string
                   format: uri
                   example: "http://guara.ueg.br/ontologias/v1/repositoriosamigos#meu_repo_principal"
-                id_local_repo: # Retornando o ID local usado para criação
+                id_local_repo:
                   type: string
                   example: "meu_repo_principal"
       400:
@@ -236,104 +240,62 @@ def adicionar_repo_endpoint(): # Renomeado de adicionar_repo
 
         required_fields = ['id_local_repo', 'nome','contato','descricao','responsavel']
         for field in required_fields:
-            if field not in data or not data[field]: # Checa se o campo existe e não é vazio
+            if field not in data or not data[field]:
                 return jsonify({"error": "Invalid input", "message": f"Campo '{field}' é obrigatório e não pode ser vazio."}), 400
 
-        cfg = load_config()
-        prefix_base_repo_config = cfg.get('prefix_base_repo') # Ex: "http://guara.ueg.br/ontologias/v1/repositoriosamigos#"
-        sparql_update_url = cfg.get('repo_update_url') # No config original era 'class_update_url', mas 'repo_update_url' é mais semântico aqui.
+        prefix_base_repo_config = config.get('prefix_base_repo')
+        sparql_update_url = REPO_UPDATE_URL
 
         if not prefix_base_repo_config or not sparql_update_url:
             current_app.logger.error("Configurações 'prefix_base_repo' ou 'repo_update_url' não encontradas.")
             return jsonify({"error": "Configuration Error", "message": "Configuração do servidor incompleta."}), 500
-        
+
         if not prefix_base_repo_config.endswith(('#', '/')):
             prefix_base_repo_config += "#"
 
-        id_local = data['id_local_repo'].replace(" ", "_") # Sanitização básica
+        id_local = data['id_local_repo'].replace(" ", "_")
         repo_uri_completa = f"<{prefix_base_repo_config}{id_local}>"
-        
-        # A query original usa rpa: para propriedades, mas o prefixo : para a classe.
-        # Usaremos rpa: consistentemente para o vocabulário de repositórios.
-        # O prefixo : será a base URI do grafo onde os dados são inseridos.
-        # Ex: PREFIX : <http://localhost:3030/repositoriosamigos#>
-        #     PREFIX rpa: <http://guara.ueg.br/ontologias/v1/repositorios#> (vocabulário)
 
-        # Assumindo que 'repo_update_url' aponta para um dataset específico, ex: /repositoriosamigos/update
-        # Então, o prefixo : na query SPARQL deve ser a base desse dataset.
-        # Se 'prefix_base_repo' for o vocabulário, e 'repo_update_url' o endpoint,
-        # a URI da classe será <prefix_base_repo_config_value><id_local_value>
-        # e as propriedades rpa:nome etc.
+        sparql_update = f"""
+            PREFIX rpa:   <http://guara.ueg.br/ontologias/v1/repositorios#>
+            PREFIX rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+            PREFIX owl:   <http://www.w3.org/2002/07/owl#>
+            PREFIX rdfs:  <http://www.w3.org/2000/01/rdf-schema#>
 
-        sparql_query = f"""
-            PREFIX rpa:   <http://guara.ueg.br/ontologias/v1/repositorios#> 
-            PREFIX rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#> 
-            PREFIX owl:   <http://www.w3.org/2002/07/owl#> 
-            PREFIX rdfs:  <http://www.w3.org/2000/01/rdf-schema#> 
-            
             INSERT DATA {{
-                {repo_uri_completa} rdf:type owl:NamedIndividual ; # Ou owl:Class se for a intenção
-                                    rdf:type rpa:Repositorio ; # Adicionando um tipo específico do vocabulário rpa
-                                    rpa:idLocal "{id_local}" ; # Usando id_local como propriedade
+                {repo_uri_completa} rdf:type owl:NamedIndividual ;
+                                    rdf:type rpa:Repositorio ;
+                                    rpa:idLocal "{id_local}" ;
                                     rpa:nome "{data['nome'].replace('"', '\\"')}" ;
                                     rpa:contato "{data['contato'].replace('"', '\\"')}" ;
                                     rpa:descricao \"\"\"{data['descricao'].replace('"""', '\\"""')}\"\"\" ;
                                     rpa:responsavel "{data['responsavel'].replace('"', '\\"')}" .
             }}
         """
-        # Nota: A query original criava um owl:Class. Se a intenção é criar instâncias de repositórios,
-        # rdf:type owl:NamedIndividual e rdf:type rpa:Repositorio (onde rpa:Repositorio é uma owl:Class) seria mais comum.
-        # Mantendo a criação de owl:Class se essa for a modelagem intencional, mas ajustando para usar rdfs:label para nome.
-        # Se for owl:Class:
-        # sparql_query = f"""
-        #     PREFIX rdfs:  <http://www.w3.org/2000/01/rdf-schema#> 
-        #     PREFIX owl:   <http://www.w3.org/2002/07/owl#> 
-        #     PREFIX rpa:   <http://guara.ueg.br/ontologias/v1/repositorios#> 
-            
-        #     INSERT DATA {{
-        #         {repo_uri_completa} rdf:type owl:Class ;
-        #                             rdfs:label "{data['nome'].replace('"', '\\"')}" ;
-        #                             rdfs:comment \"\"\"{data['descricao'].replace('"""', '\\"""')}\"\"\" ;
-        #                             rpa:contato "{data['contato'].replace('"', '\\"')}" ;
-        #                             rpa:responsavel "{data['responsavel'].replace('"', '\\"')}" ;
-        #                             rpa:idLocal "{id_local}" . 
-        #     }}
-        # """
+        current_app.logger.debug(f"SPARQL update para adicionar repositório: {sparql_update}")
 
-        current_app.logger.debug(f"SPARQL query para adicionar repositório: {sparql_query}")
-        headers = {
-            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-            'Accept': 'application/json', # Aceita JSON para a resposta do update
-            'X-Requested-With': 'XMLHttpRequest'
-        }
-        data_envio = {'update': sparql_query}
-        encoded_data = urlencode(data_envio)
-
-        response = requests.post(sparql_update_url, headers=headers, data=encoded_data, timeout=10)
-        response.raise_for_status()
+        execute_sparql_update(sparql_update_url, sparql_update)
 
         return jsonify({
-            "message": "Definição de repositório adicionada com sucesso.", 
+            "message": "Definição de repositório adicionada com sucesso.",
             "repositorio_uri": repo_uri_completa.strip("<>"),
             "id_local_repo": id_local
             }), 201
 
-    except requests.exceptions.HTTPError as http_err:
-        current_app.logger.error(f"Erro HTTP na atualização SPARQL (adicionar_repo): {http_err} - Response: {response.text}")
-        return jsonify({"error": "SPARQL Update Failed", "message": response.text, "status_code": response.status_code}), response.status_code
-    except requests.exceptions.RequestException as e:
-        current_app.logger.error(f"RequestException em adicionar_repo: {str(e)}")
-        return jsonify({"error": "RequestException", "message": str(e)}), 500
-    except KeyError as e:
-        current_app.logger.error(f"KeyError em adicionar_repo (configuração?): {str(e)}")
-        return jsonify({"error": "Configuration Error", "message": f"Chave de configuração ausente: {str(e)}"}), 400
     except Exception as e:
-        current_app.logger.error(f"Erro inesperado em adicionar_repo: {str(e)}")
-        return jsonify({"error": "Exception", "message": str(e)}), 500
+        current_app.logger.error(f"Erro em adicionar_repo_endpoint: {str(e)}")
+        if hasattr(e, 'args') and len(e.args) > 1 and isinstance(e.args[0], str) and "status" in e.args[0]:
+            status_code = int(e.args[0].split("status ")[1].split(" ")[0])
+            message = e.args[1]
+            return jsonify({"error": "SPARQL Update Failed", "message": message}), status_code
+        elif "Network error" in str(e):
+            return jsonify({"error": "Network Error", "message": str(e)}), 500
+        else:
+            return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 
 @repo_app.route('/create_dataset', methods=['POST'])
-def criar_dataset_fuseki(): # Renomeado de criar_dataset
+def criar_dataset_fuseki():
     """
     Cria um novo dataset (TDB2 por padrão) no servidor Apache Fuseki.
     Este endpoint interage diretamente com a API de administração do Fuseki.
@@ -397,7 +359,7 @@ def criar_dataset_fuseki(): # Renomeado de criar_dataset
       409: # Conflict
         description: Dataset com o mesmo nome já existe no Fuseki.
         content:
-          application/json: # A resposta do Fuseki pode variar
+          application/json:
             schema:
               type: object
               properties:
@@ -414,16 +376,14 @@ def criar_dataset_fuseki(): # Renomeado de criar_dataset
         if not nome_dataset_req:
             return jsonify({"error": "Invalid input", "message": "Campo 'nome_dataset' é obrigatório."}), 400
 
-        tipo_dataset_req = data.get('tipo_dataset', 'tdb2') 
+        tipo_dataset_req = data.get('tipo_dataset', 'tdb2')
 
-        # Carregar configurações do Fuseki (idealmente de um arquivo de configuração seguro ou variáveis de ambiente)
-        # Estes valores podem ser sobrescritos pelo request se fornecidos, mas é mais seguro pegar da config do servidor.
-        cfg = load_config() # Supondo que config.json tenha fuseki_admin_url, user, pass
-        fuseki_base_url = data.get('fuseki_admin_url', cfg.get('fuseki_url', 'http://localhost:3030')).rstrip('/')
-        username = data.get('fuseki_admin_user', cfg.get('fuseki_admin_user', 'admin')) # Default 'admin'
-        password = data.get('fuseki_admin_password', cfg.get('fuseki_admin_password')) # Senha deve vir da config
+        # Carregar configurações do Fuseki
+        fuseki_base_url = data.get('fuseki_admin_url', config.get('fuseki_url', 'http://localhost:3030')).rstrip('/')
+        username = data.get('fuseki_admin_user', config.get('fuseki_admin_user', 'admin'))
+        password = data.get('fuseki_admin_password', config.get('fuseki_admin_password'))
 
-        if not password: # Senha é crucial
+        if not password:
              current_app.logger.error("Senha de admin do Fuseki não configurada no servidor.")
              return jsonify({"error": "Server Configuration Error", "message": "Credenciais de admin do Fuseki não configuradas."}), 500
 
@@ -433,50 +393,136 @@ def criar_dataset_fuseki(): # Renomeado de criar_dataset
             'dbName': nome_dataset_req,
             'dbType': tipo_dataset_req
         }
-        
-        current_app.logger.info(f"Tentando criar dataset '{nome_dataset_req}' em {fuseki_datasets_endpoint}")
+
+        # Usar requests diretamente para esta chamada, pois não é uma operação SPARQL
         response = requests.post(
             fuseki_datasets_endpoint,
             data=form_payload,
             auth=(username, password),
-            timeout=15 # Timeout para a operação no Fuseki
+            timeout=15
         )
+        response.raise_for_status()
 
-        # Fuseki retorna 200 OK para sucesso.
-        # Se o dataset já existe, ele também retorna 200 OK mas não cria um novo (comportamento pode variar com a versão).
-        # É melhor verificar a resposta de texto ou fazer um GET antes/depois para confirmar.
-        # Para este exemplo, vamos assumir que 200 é sucesso e não há conflito explícito na resposta de POST.
         if response.status_code == 200:
-            # Verificar se a resposta contém alguma indicação de que já existia, se possível
-            if f"/{nome_dataset_req}" in response.text: # Heurística simples
+            if f"/{nome_dataset_req}" in response.text:
                  current_app.logger.info(f"Dataset '{nome_dataset_req}' criado/já existia no Fuseki.")
                  return jsonify({"message": f"Dataset '{nome_dataset_req}' criado ou já existente no Fuseki.", "nome_dataset": nome_dataset_req}), 200
-            else: # Resposta inesperada para 200
+            else:
                  current_app.logger.warning(f"Fuseki retornou 200 mas a resposta não confirma criação para '{nome_dataset_req}': {response.text}")
                  return jsonify({"message": f"Operação de criação do dataset '{nome_dataset_req}' no Fuseki retornou 200, mas a resposta foi inconclusiva.", "details": response.text, "nome_dataset": nome_dataset_req}), 200
 
-        # Tratar outros códigos de status do Fuseki
-        elif response.status_code == 401: # Unauthorized
-            current_app.logger.error(f"Falha na autenticação com Fuseki para criar dataset '{nome_dataset_req}'.")
+    except requests.exceptions.HTTPError as http_err:
+        current_app.logger.error(f"Erro HTTP na criação do dataset Fuseki: {http_err} - Resposta: {http_err.response.text}")
+        status_code = http_err.response.status_code
+        message = http_err.response.text
+        if status_code == 401:
             return jsonify({"error": "Fuseki Authentication Failed", "message": "Credenciais de administrador do Fuseki inválidas ou não fornecidas."}), 401
-        elif response.status_code == 409: # Conflict (se Fuseki explicitamente retornar isso)
-             current_app.logger.warning(f"Dataset '{nome_dataset_req}' já existe no Fuseki (409).")
+        elif status_code == 409:
              return jsonify({"error": "Conflict", "message": f"Dataset '{nome_dataset_req}' já existe no Fuseki."}), 409
         else:
-            current_app.logger.error(f"Erro ao criar dataset '{nome_dataset_req}' no Fuseki: {response.status_code} - {response.text}")
             return jsonify({
                 "error": "Fuseki Operation Failed",
-                "message": f"Falha ao criar dataset no Fuseki: {response.text}",
-                "status_code_fuseki": response.status_code
-            }), response.status_code
-
+                "message": f"Falha ao criar dataset no Fuseki: {message}",
+                "status_code_fuseki": status_code
+            }), status_code
     except requests.exceptions.RequestException as e:
         current_app.logger.error(f"RequestException em criar_dataset_fuseki: {str(e)}")
         return jsonify({"error": "RequestException", "message": f"Erro de comunicação com o servidor Fuseki: {str(e)}"}), 500
-    except KeyError as e: # Para erros de config
+    except KeyError as e:
         current_app.logger.error(f"KeyError em criar_dataset_fuseki (configuração?): {str(e)}")
         return jsonify({"error": "Configuration Error", "message": f"Chave de configuração ausente: {str(e)}"}), 400
     except Exception as e:
         current_app.logger.error(f"Erro inesperado em criar_dataset_fuseki: {str(e)}")
         return jsonify({"error": "Exception", "message": str(e)}), 500
 
+
+@repo_app.route('/meus_repos', methods=['GET'])
+@token_required
+def meus_repositorios():
+    """
+    Lista os detalhes completos de todos os repositórios associados ao usuário logado.
+    ---
+    tags:
+      - Repositórios
+      - Autenticação
+    security:
+      - BearerAuth: []
+    responses:
+      200:
+        description: Lista de repositórios do usuário retornada com sucesso.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: "Repositórios do usuário carregados com sucesso."
+                repositorios:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      nome: {"type": "string", "example": "Repositório Principal"}
+                      uri: {"type": "string", "format": "uri", "example": "http://localhost:3030/repositorio_principal"}
+                      contato: {"type": "string", "example": "contato@repo.org"}
+                      descricao: {"type": "string", "example": "Acervo principal da instituição."}
+                      responsavel: {"type": "string", "example": "Instituição XYZ"}
+                  description: Detalhes dos repositórios aos quais o usuário tem acesso.
+      401:
+        description: Token não fornecido ou inválido.
+      500:
+        description: Erro interno no servidor ao buscar repositórios do usuário.
+    """
+    try:
+        user_uri = g.user_uri # Obtém a URI do usuário a partir do decorador token_required
+
+        if not user_uri:
+            return jsonify({"message": "URI do usuário não encontrada no contexto da requisição."}), 500
+
+        # 1. Consultar o grafo de usuários para obter os nomes dos repositórios associados a este user_uri
+        query_user_repos = f"""
+        PREFIX : <http://guara.ueg.br/ontologias/usuarios#>
+        SELECT ?repo_name WHERE {{
+            <{user_uri}> :repo ?repo_name .
+        }}
+        """
+        current_app.logger.debug(f"Query para repositórios do usuário: {query_user_repos}")
+
+        user_repos_results = execute_sparql_query(USER_QUERY_URL, query_user_repos)
+
+        if not user_repos_results or not user_repos_results.get('results', {}).get('bindings'):
+            return jsonify({"message": "Nenhum repositório encontrado para este usuário."}), 200 # Ou 404 se preferir
+
+        repositorio_nomes_associados = [
+            binding['repo_name']['value']
+            for binding in user_repos_results['results']['bindings']
+        ]
+
+        # Remove duplicatas, caso um usuário tenha o mesmo repo listado múltiplas vezes
+        repositorio_nomes_associados_unicos = list(set(repositorio_nomes_associados))
+
+        # 2. Para cada nome de repositório, obter os detalhes completos usando obter_repositorio_por_nome
+        repositorios_detalhados = []
+        for repo_name in repositorio_nomes_associados_unicos:
+            repo_details = obter_repositorio_por_nome(repo_name)
+            if repo_details:
+                repositorios_detalhados.append(repo_details)
+            else:
+                current_app.logger.warning(f"Detalhes para o repositório '{repo_name}' não encontrados.")
+
+        return jsonify({
+            "message": "Repositórios do usuário carregados com sucesso.",
+            "repositorios": repositorios_detalhados
+        }), 200
+
+    except Exception as e:
+        current_app.logger.error(f"Erro ao buscar repositórios do usuário: {str(e)}")
+        if hasattr(e, 'args') and len(e.args) > 1 and isinstance(e.args[0], str) and "status" in e.args[0]:
+            status_code = int(e.args[0].split("status ")[1].split(" ")[0])
+            message = e.args[1]
+            return jsonify({"error": "SPARQL Error", "message": message}), status_code
+        elif "Network error" in str(e):
+            return jsonify({"error": "Network Error", "message": str(e)}), 500
+        else:
+            return jsonify({"error": "Internal Server Error", "message": str(e)}), 500

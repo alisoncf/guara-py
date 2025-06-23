@@ -3,32 +3,20 @@ import os
 import uuid
 import shutil
 from werkzeug.utils import secure_filename
-import requests # Para fazer chamadas SPARQL
-from urllib.parse import urlencode
+# Removido 'requests' e 'urlencode' pois agora serão gerenciados por 'utils'
 
-# Assumindo que get_prefix e token_required são importados se necessário
-# from consultas import get_prefix (se for construir queries complexas manualmente)
-# from blueprints.auth import token_required (para proteger os endpoints)
-from consultas import get_prefix # Para os prefixos SPARQL
+# Importar as funções refatoradas de utils.py
+from utils import execute_sparql_query, execute_sparql_update # execute_sparql_query pode não ser diretamente usado aqui, mas é bom ter
+
+# Assumindo que get_prefix é importado se necessário (e parece ser para construir queries)
+from consultas import get_prefix
 from blueprints.auth import token_required
 
 
 uploadapp = Blueprint('uploadapi', __name__)
 
-# Função helper para executar updates SPARQL (poderia estar num módulo utilitário)
-def _execute_sparql_update(endpoint_url, sparql_update_query):
-    headers = {
-        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-        'Accept': 'application/json', # Espera JSON como resposta do update
-        'X-Requested-With': 'XMLHttpRequest'
-    }
-    payload = {'update': sparql_update_query}
-    encoded_data = urlencode(payload)
-    
-    current_app.logger.debug(f"Executando SPARQL Update em {endpoint_url}: {sparql_update_query}")
-    response = requests.post(endpoint_url, headers=headers, data=encoded_data, timeout=10)
-    response.raise_for_status() # Levanta HTTPError para respostas 4xx/5xx
-    return response
+# A função _execute_sparql_update local foi removida,
+# pois agora usaremos a versão centralizada de utils.py
 
 
 @uploadapp.route('/upload', methods=['POST'])
@@ -122,7 +110,7 @@ def upload_files_and_associate(): # Renomeado de upload_files
         objeto_id_local = request.form.get('objeto_id')
         repo_update_url = request.form.get('repository_update_url')
         repo_base_uri = request.form.get('repository_base_uri')
-        
+
         links_externos_list = request.form.getlist('links_externos')
         arquivos_midia_list = request.files.getlist('arquivos_midia')
 
@@ -131,7 +119,7 @@ def upload_files_and_associate(): # Renomeado de upload_files
 
         if not repo_base_uri.endswith(('#', '/')):
             repo_base_uri += "#"
-        
+
         objeto_uri_completa = f"<{repo_base_uri}{objeto_id_local}>"
 
         upload_folder_config = current_app.config.get('UPLOAD_FOLDER')
@@ -158,10 +146,10 @@ def upload_files_and_associate(): # Renomeado de upload_files
             extension = os.path.splitext(original_filename)[1]
             unique_filename = f"{uuid.uuid4().hex}{extension}"
             file_path_on_disk = os.path.join(objeto_media_folder, unique_filename)
-            
+
             try:
                 file_storage.save(file_path_on_disk)
-                
+
                 # Construir URL pública para a mídia
                 # Assegurar que media_base_url_config não tenha / no final e objeto_id_local não tenha no início se concatenado
                 public_media_url = f"{media_base_url_config.rstrip('/')}/{objeto_id_local}/{unique_filename}"
@@ -172,7 +160,8 @@ def upload_files_and_associate(): # Renomeado de upload_files
                         {objeto_uri_completa} schema:associatedMedia {media_uri_to_add} .
                     }}
                 """
-                _execute_sparql_update(repo_update_url, sparql_insert_media)
+                current_app.logger.debug(f"SPARQL insert media: {sparql_insert_media}") # Adicionado log
+                execute_sparql_update(repo_update_url, sparql_insert_media) # Usar execute_sparql_update
                 associacoes_sucesso.append(public_media_url)
             except Exception as e:
                 current_app.logger.error(f"Falha ao guardar ou associar ficheiro {original_filename}: {str(e)}")
@@ -188,12 +177,13 @@ def upload_files_and_associate(): # Renomeado de upload_files
                             {objeto_uri_completa} schema:associatedMedia {media_uri_to_add} .
                         }}
                     """
-                    _execute_sparql_update(repo_update_url, sparql_insert_link)
+                    current_app.logger.debug(f"SPARQL insert link: {sparql_insert_link}") # Adicionado log
+                    execute_sparql_update(repo_update_url, sparql_insert_link) # Usar execute_sparql_update
                     associacoes_sucesso.append(link_url.strip())
                 except Exception as e:
                     current_app.logger.error(f"Falha ao associar link externo {link_url}: {str(e)}")
                     associacoes_falha.append({"media_identificador": link_url, "erro": str(e)})
-        
+
         return jsonify({
             'message': 'Processamento de mídias concluído.',
             'objeto_uri': objeto_uri_completa.strip("<>"),
@@ -201,9 +191,17 @@ def upload_files_and_associate(): # Renomeado de upload_files
             'associacoes_falha': associacoes_falha
         }), 200
 
-    except Exception as e:
+    except Exception as e: # Captura exceções gerais
         current_app.logger.error(f"Erro geral no endpoint /upload: {str(e)}")
-        return jsonify({'error': 'Erro interno no servidor ao processar upload.', 'details': str(e)}), 500
+        # Tratamento de erro mais específico se a exceção vier de utils.py
+        if hasattr(e, 'args') and len(e.args) > 1 and isinstance(e.args[0], str) and "status" in e.args[0]:
+            status_code = int(e.args[0].split("status ")[1].split(" ")[0])
+            message = e.args[1]
+            return jsonify({"error": "SPARQL Update Error", "message": message}), status_code
+        elif "Network error" in str(e):
+            return jsonify({"error": "Network Error", "message": str(e)}), 500
+        else:
+            return jsonify({'error': 'Erro interno no servidor ao processar upload.', 'details': str(e)}), 500
 
 
 @uploadapp.route('/remove', methods=['POST']) # Usar DELETE seria mais semântico, mas o original é POST
@@ -293,7 +291,7 @@ def remove_media_association_and_file(): # Renomeado de remove_file
 
         if not repo_base_uri.endswith(('#', '/')):
             repo_base_uri += "#"
-        
+
         objeto_uri_completa = f"<{repo_base_uri}{objeto_id_local}>"
         media_uri_rdf_format = f"<{media_uri_to_remove_param}>" # URI completa da mídia
 
@@ -303,37 +301,30 @@ def remove_media_association_and_file(): # Renomeado de remove_file
                 {objeto_uri_completa} schema:associatedMedia {media_uri_rdf_format} .
             }}
         """
-        # Poderia usar DELETE WHERE se a exatidão da media_uri_rdf_format não for garantida (ex: normalização de URL)
-        # sparql_delete_media = f"""{get_prefix()}
-        #     DELETE WHERE {{
-        #         {objeto_uri_completa} schema:associatedMedia ?media .
-        #         FILTER(STR(?media) = STR({media_uri_rdf_format}))
-        #     }}
-        # """
-        _execute_sparql_update(repo_update_url, sparql_delete_media)
-        
+        current_app.logger.debug(f"SPARQL delete media: {sparql_delete_media}") # Adicionado log
+        execute_sparql_update(repo_update_url, sparql_delete_media) # Usar execute_sparql_update
+
         # 2. Mover o ficheiro local, se a URI corresponder a um ficheiro gerido localmente
         ficheiro_movido_nome = None
         upload_folder_config = current_app.config.get('UPLOAD_FOLDER')
         media_base_url_config = current_app.config.get('MEDIA_BASE_URL', '/media').rstrip('/')
-        
+
         # Tentar extrair o nome do ficheiro da URI, assumindo a estrutura {media_base_url}/{objeto_id}/{filename}
-        # Esta lógica de "desconstrução" da URL é frágil e depende da consistência da URL.
         expected_prefix = f"{media_base_url_config}/{objeto_id_local}/"
         if media_uri_to_remove_param.startswith(expected_prefix):
             filename_to_move = media_uri_to_remove_param[len(expected_prefix):]
-            
+
             if upload_folder_config and filename_to_move:
                 objeto_media_folder = os.path.join(upload_folder_config, str(objeto_id_local))
                 current_file_path = os.path.join(objeto_media_folder, filename_to_move)
-                
+
                 if os.path.exists(current_file_path):
                     pasta_excluidos = os.path.join(objeto_media_folder, "excluidos")
                     if not os.path.exists(pasta_excluidos):
                         os.makedirs(pasta_excluidos, exist_ok=True)
-                    
+
                     destino_path = os.path.join(pasta_excluidos, filename_to_move)
-                    
+
                     # Evitar sobrescrever se já existir em excluídos (ou adicionar timestamp)
                     if os.path.exists(destino_path):
                         base, ext = os.path.splitext(filename_to_move)
@@ -355,15 +346,13 @@ def remove_media_association_and_file(): # Renomeado de remove_file
             'ficheiro_movido': ficheiro_movido_nome
         }), 200
 
-    except requests.exceptions.HTTPError as http_err:
-        # A resposta do _execute_sparql_update já foi um HTTPError
-        response_obj = http_err.response
-        current_app.logger.error(f"SPARQL update failed for /remove: {http_err} - Response: {response_obj.text}")
-        return jsonify({"error": "SPARQL Update Error", "message": response_obj.text, "status_code": response_obj.status_code}), response_obj.status_code
-    except requests.exceptions.RequestException as req_err:
-        current_app.logger.error(f"RequestException for /remove: {str(req_err)}")
-        return jsonify({"error": "RequestException", "message": str(req_err)}), 500
-    except Exception as e:
+    except Exception as e: # Captura exceções gerais, incluindo as de execute_sparql_update
         current_app.logger.error(f"Erro geral no endpoint /remove: {str(e)}")
-        return jsonify({'error': 'Erro interno no servidor ao remover mídia.', 'details': str(e)}), 500
-
+        if hasattr(e, 'args') and len(e.args) > 1 and isinstance(e.args[0], str) and "status" in e.args[0]:
+            status_code = int(e.args[0].split("status ")[1].split(" ")[0])
+            message = e.args[1]
+            return jsonify({"error": "SPARQL Update Error", "message": message}), status_code
+        elif "Network error" in str(e):
+            return jsonify({"error": "Network Error", "message": str(e)}), 500
+        else:
+            return jsonify({'error': 'Erro interno no servidor ao remover mídia.', 'details': str(e)}), 500

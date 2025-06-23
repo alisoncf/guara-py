@@ -1,9 +1,9 @@
-from flask import Blueprint, request, jsonify,current_app
-import requests, os
+from flask import Blueprint, request, jsonify, current_app
 import uuid # Não usado diretamente nos endpoints atuais
-from consultas import get_prefix # get_sparq_all e get_sparq_dim não são usados aqui
-from config_loader import load_config
-from urllib.parse import urlencode
+# Importar as funções refatoradas de utils.py
+from utils import execute_sparql_query, execute_sparql_update
+from consultas import get_prefix
+# from config_loader import load_config # Não mais necessário importar aqui, pois as URLs são passadas
 from blueprints.auth import token_required # Importar o decorador de token
 
 relationapi_app = Blueprint('relationapi_app', __name__)
@@ -133,12 +133,12 @@ def list_relations_of_object(): # Renomeado de 'list'
         return jsonify({"error": 'Invalid input', "message": "Campo 'id_objeto' (URI do objeto) é obrigatório."}), 400
     if not repo_sparql_endpoint:
         return jsonify({"error": 'Invalid input', "message": "Campo 'repository_sparql_endpoint' é obrigatório."}), 400
-    
+
     # A query SPARQL espera que object_uri_param seja uma URI completa.
     # Não é necessário construir PREFIX : <{repo_sparql_endpoint}#> para esta query específica.
-    
+
     sparql_query = get_prefix() + f"""
-        SELECT ?id ?propriedade ?valor  
+        SELECT ?id ?propriedade ?valor
             (IF(isURI(?valor), "URI", "Literal") AS ?tipo_recurso)
             ?titulo
         WHERE {{
@@ -163,26 +163,21 @@ def list_relations_of_object(): # Renomeado de 'list'
     """
     current_app.logger.debug(f"SPARQL list_relations query: {sparql_query}")
 
-    headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-               'Accept': 'application/sparql-results+json,*/*;q=0.9',
-               'X-Requested-With': 'XMLHttpRequest'}
-    payload_query = {'query': sparql_query} # Renomeado para evitar conflito
-    encoded_payload = urlencode(payload_query)
-    
     try:
-        response = requests.post(repo_sparql_endpoint, headers=headers, data=encoded_payload, timeout=10)
-        response.raise_for_status()
-        result = response.json()
+        # Usando execute_sparql_query de utils.py
+        result = execute_sparql_query(repo_sparql_endpoint, sparql_query)
         return jsonify(result)
-    except requests.exceptions.HTTPError as http_err:
-        current_app.logger.error(f"SPARQL query failed for list_relations: {http_err} - Response: {response.text}")
-        return jsonify({"error": f"SPARQL query failed with status {response.status_code}", "message": response.text}), response.status_code
-    except requests.exceptions.RequestException as e:
-        current_app.logger.error(f"RequestException for list_relations: {str(e)}")
-        return jsonify({"error": "RequestException", "message": str(e)}), 500
     except Exception as e:
-        current_app.logger.error(f"Unexpected error in list_relations: {str(e)}")
-        return jsonify({"error": "Exception", "message": str(e)}), 500
+        current_app.logger.error(f"Erro ao listar relações: {str(e)}")
+        # Captura as exceções levantadas por execute_sparql_query
+        if hasattr(e, 'args') and len(e.args) > 1 and isinstance(e.args[0], str) and "status" in e.args[0]:
+            status_code = int(e.args[0].split("status ")[1].split(" ")[0])
+            message = e.args[1]
+            return jsonify({"error": "SPARQL Query Error", "message": message}), status_code
+        elif "Network error" in str(e):
+            return jsonify({"error": "Network Error", "message": str(e)}), 500
+        else:
+            return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 
 @relationapi_app.route('/add', methods=['POST'])
@@ -274,7 +269,7 @@ def add_rdf_relation(): # Renomeado de 'add'
     data = request.get_json()
     if not data: return jsonify({"error": "Invalid input", "message": "Request body cannot be empty"}), 400
 
-    required_fields = ['sujeito_id_local', 'predicado_uri', 'valor_objeto', 
+    required_fields = ['sujeito_id_local', 'predicado_uri', 'valor_objeto',
                        'tipo_valor_objeto', 'repository_update_url', 'repository_base_uri']
     for field in required_fields:
         if field not in data or data[field] is None: # Checa também por None
@@ -283,10 +278,10 @@ def add_rdf_relation(): # Renomeado de 'add'
     repo_base_uri = data['repository_base_uri']
     if not repo_base_uri.endswith(('#', '/')):
         repo_base_uri += "#"
-    
+
     sujeito_uri_completa = f"<{repo_base_uri}{data['sujeito_id_local']}>"
     predicado_uri_completa = f"<{data['predicado_uri']}>" # Assume que já vem com <> ou é URI nua
-    
+
     valor_obj_str = data['valor_objeto']
     tipo_valor = data['tipo_valor_objeto'].upper() # Normaliza para URI ou LITERAL
 
@@ -297,7 +292,7 @@ def add_rdf_relation(): # Renomeado de 'add'
         # Escapar aspas dentro do literal
         valor_literal_escapado = valor_obj_str.replace('"', '\\"')
         objeto_sparql_formatado = f'"{valor_literal_escapado}"' # Aspas duplas para literal
-        
+
         datatype_uri = data.get('literal_datatype_uri')
         lang_tag = data.get('literal_lang_tag')
 
@@ -311,34 +306,32 @@ def add_rdf_relation(): # Renomeado de 'add'
         return jsonify({"error": "Invalid input", "message": "Campo 'tipo_valor_objeto' deve ser 'URI' ou 'Literal'."}), 400
 
     sparql_update_url = data['repository_update_url']
-                
-    sparql_query = f"""{get_prefix()}
+
+    sparql_update = f"""{get_prefix()}
         INSERT DATA {{
             {sujeito_uri_completa} {predicado_uri_completa} {objeto_sparql_formatado} .
         }}"""
-    current_app.logger.debug(f"SPARQL add_rdf_relation query: {sparql_query}")
-
-    headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest'}
-    payload = {'update': sparql_query}
-    encoded_data = urlencode(payload)
+    current_app.logger.debug(f"SPARQL add_rdf_relation update: {sparql_update}")
 
     try:
-        response = requests.post(sparql_update_url, headers=headers, data=encoded_data, timeout=10)
-        response.raise_for_status()
+        # Usando execute_sparql_update de utils.py
+        execute_sparql_update(sparql_update_url, sparql_update)
         return jsonify({
-            "message": "Relação adicionada com sucesso", 
+            "message": "Relação adicionada com sucesso",
             "sujeito_uri": sujeito_uri_completa.strip("<>"),
             "tripla_adicionada": f"{sujeito_uri_completa} {predicado_uri_completa} {objeto_sparql_formatado} ."
         }), 201
-    except requests.exceptions.HTTPError as http_err:
-        current_app.logger.error(f"SPARQL update failed for add_rdf_relation: {http_err} - Response: {response.text}")
-        return jsonify({"error": "SPARQL Update Error", "message": response.text, "status_code": response.status_code}), response.status_code
-    except requests.exceptions.RequestException as e:
-        current_app.logger.error(f"RequestException for add_rdf_relation: {str(e)}")
-        return jsonify({"error": "RequestException", "message": str(e)}), 500
     except Exception as e:
-        current_app.logger.error(f"Unexpected error in add_rdf_relation: {str(e)}")
-        return jsonify({"error": "Exception", "message": str(e)}), 500
+        current_app.logger.error(f"Erro ao adicionar relação RDF: {str(e)}")
+        # Captura as exceções levantadas por execute_sparql_update
+        if hasattr(e, 'args') and len(e.args) > 1 and isinstance(e.args[0], str) and "status" in e.args[0]:
+            status_code = int(e.args[0].split("status ")[1].split(" ")[0])
+            message = e.args[1]
+            return jsonify({"error": "SPARQL Update Error", "message": message}), status_code
+        elif "Network error" in str(e):
+            return jsonify({"error": "Network Error", "message": str(e)}), 500
+        else:
+            return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 
 @relationapi_app.route('/delete_all_relations', methods=['DELETE','POST']) # Renomeado de '/delete'
@@ -397,36 +390,34 @@ def delete_all_relations_of_object(): # Renomeado de 'remove'
 
     if not object_uri or not sparql_update_url:
         return jsonify({"error": "Invalid input", "message": "Campos 'object_uri_to_clear' e 'repository_update_url' são obrigatórios."}), 400
-        
+
     obj_uri_sparql = f"<{object_uri}>" # O original usava :objeto_id, o que implica uma base URI. Agora esperamos URI completa.
-    
+
     # Query para deletar todas as triplas onde o objeto é SUJEITO.
-    # A query original era DELETE WHERE { :{objeto_id} ?p ?o . }
-    sparql_query = f"""{get_prefix()}
+    sparql_update = f"""{get_prefix()}
         DELETE WHERE {{
             {obj_uri_sparql} ?p ?o .
         }}
     """
-    current_app.logger.debug(f"SPARQL delete_all_relations_of_object query: {sparql_query}")
-    headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest'}
-    payload = {'update': sparql_query}
-    encoded_data = urlencode(payload)
+    current_app.logger.debug(f"SPARQL delete_all_relations_of_object update: {sparql_update}")
 
     try:
-        response = requests.post(sparql_update_url, headers=headers, data=encoded_data, timeout=10)
-        response.raise_for_status()
+        # Usando execute_sparql_update de utils.py
+        execute_sparql_update(sparql_update_url, sparql_update)
         return jsonify({"message": "Relações do objeto como sujeito foram removidas.", "object_uri": object_uri}), 200
-    except requests.exceptions.HTTPError as http_err:
-        current_app.logger.error(f"SPARQL update failed for delete_all_relations: {http_err} - Response: {response.text}")
-        return jsonify({"error": "SPARQL Update Error", "message": response.text, "status_code": response.status_code}), response.status_code
-    except requests.exceptions.RequestException as e:
-        current_app.logger.error(f"RequestException for delete_all_relations: {str(e)}")
-        return jsonify({"error": "RequestException", "message": str(e)}), 500
     except Exception as e:
-        current_app.logger.error(f"Unexpected error in delete_all_relations: {str(e)}")
-        return jsonify({"error": "Exception", "message": str(e)}), 500
+        current_app.logger.error(f"Erro ao remover todas as relações do objeto: {str(e)}")
+        # Captura as exceções levantadas por execute_sparql_update
+        if hasattr(e, 'args') and len(e.args) > 1 and isinstance(e.args[0], str) and "status" in e.args[0]:
+            status_code = int(e.args[0].split("status ")[1].split(" ")[0])
+            message = e.args[1]
+            return jsonify({"error": "SPARQL Update Error", "message": message}), status_code
+        elif "Network error" in str(e):
+            return jsonify({"error": "Network Error", "message": str(e)}), 500
+        else:
+            return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
-    
+
 @relationapi_app.route('/remover_relacao_especifica', methods=['DELETE']) # Renomeado de '/remover_relacao' e método único DELETE
 @token_required
 def remove_specific_relation(): # Renomeado de 'remover_relacao'
@@ -491,34 +482,31 @@ def remove_specific_relation(): # Renomeado de 'remover_relacao'
 
     if not all([s_uri, p_uri, o_val, sparql_update_url]):
         return jsonify({"error": "Invalid input", "message": "Campos 's', 'p', 'o' e 'repository_update_url' são obrigatórios."}), 400
-    
-    # A query original usava DELETE WHERE { {s} {p} {o} . }
-    # DELETE DATA é mais apropriado para remover uma tripla específica conhecida.
-    sparql_query = f"""{get_prefix()}
+
+    sparql_update = f"""{get_prefix()}
         DELETE DATA {{
             {s_uri} {p_uri} {o_val} .
         }}
     """
-    current_app.logger.debug(f"SPARQL remove_specific_relation query: {sparql_query}")
-    headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest'}
-    payload_data = {'update': sparql_query} # Renomeado
-    encoded_payload = urlencode(payload_data)
+    current_app.logger.debug(f"SPARQL remove_specific_relation update: {sparql_update}")
 
     try:
-        response = requests.post(sparql_update_url, headers=headers, data=encoded_payload, timeout=10)
-        response.raise_for_status()
+        # Usando execute_sparql_update de utils.py
+        execute_sparql_update(sparql_update_url, sparql_update)
         return jsonify({"message": "Relação específica excluída com sucesso", "triple_removed": f"{s_uri} {p_uri} {o_val} ."}), 200
-    except requests.exceptions.HTTPError as http_err:
-        current_app.logger.error(f"SPARQL update failed for remove_specific_relation: {http_err} - Response: {response.text}")
-        return jsonify({"error": "SPARQL Update Error", "message": response.text, "status_code": response.status_code}), response.status_code
-    except requests.exceptions.RequestException as e:
-        current_app.logger.error(f"RequestException for remove_specific_relation: {str(e)}")
-        return jsonify({"error": "RequestException", "message": str(e)}), 500
     except Exception as e:
-        current_app.logger.error(f"Unexpected error in remove_specific_relation: {str(e)}")
-        return jsonify({"error": "Exception", "message": str(e)}), 500
+        current_app.logger.error(f"Erro ao remover relação específica: {str(e)}")
+        # Captura as exceções levantadas por execute_sparql_update
+        if hasattr(e, 'args') and len(e.args) > 1 and isinstance(e.args[0], str) and "status" in e.args[0]:
+            status_code = int(e.args[0].split("status ")[1].split(" ")[0])
+            message = e.args[1]
+            return jsonify({"error": "SPARQL Update Error", "message": message}), status_code
+        elif "Network error" in str(e):
+            return jsonify({"error": "Network Error", "message": str(e)}), 500
+        else:
+            return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
-    
+
 @relationapi_app.route('/update_properties', methods=['PUT','POST']) # Renomeado de '/update'
 @token_required
 def update_object_core_properties(): # Renomeado de 'update'
@@ -596,9 +584,9 @@ def update_object_core_properties(): # Renomeado de 'update'
 
     if not all([obj_uri_param, sparql_update_url, new_title, new_subject]):
         return jsonify({"error": "Invalid input", "message": "Campos 'object_uri_to_update', 'repository_update_url', 'titulo' e 'resumo' são obrigatórios."}), 400
-    
+
     obj_uri_sparql = f"<{obj_uri_param}>"
-    
+
     # Cláusulas DELETE e INSERT
     delete_clauses = [
         f"{obj_uri_sparql} dc:title ?oldTitle .",
@@ -622,14 +610,14 @@ def update_object_core_properties(): # Renomeado de 'update'
             if insert_clauses[-1].endswith(" ."): insert_clauses[-1] = insert_clauses[-1][:-2] + " ;"
             elif not insert_clauses[-1].endswith(" ;"): insert_clauses[-1] += " ;"
             insert_clauses.append(f"               dc:description \"\"\"{data['descricao'].replace('"""', '\\"""')}\"\"\"")
-    
+
     # Adiciona ponto final à última cláusula de insert
     if insert_clauses:
       if insert_clauses[-1].endswith(" ;"): insert_clauses[-1] = insert_clauses[-1][:-2] + " ."
       elif not insert_clauses[-1].endswith(" ."): insert_clauses[-1] += " ."
 
 
-    sparql_query = f"""{get_prefix()}
+    sparql_update = f"""{get_prefix()}
         DELETE {{
             { " ".join(delete_clauses) }
         }}
@@ -640,29 +628,27 @@ def update_object_core_properties(): # Renomeado de 'update'
             { " ".join(where_clauses) }
         }}
     """
-    current_app.logger.debug(f"SPARQL update_object_core_properties query: {sparql_query}")
-    headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest'}
-    payload_data = {'update': sparql_query} # Renomeado
-    encoded_payload = urlencode(payload_data)
-         
+    current_app.logger.debug(f"SPARQL update_object_core_properties update: {sparql_update}")
+
     try:
-        response = requests.post(sparql_update_url, headers=headers, data=encoded_payload, timeout=10)
-        response.raise_for_status()
+        # Usando execute_sparql_update de utils.py
+        execute_sparql_update(sparql_update_url, sparql_update)
         return jsonify({"message": "Propriedades do objeto atualizadas com sucesso", "object_uri": obj_uri_param}), 200
-    except requests.exceptions.HTTPError as http_err:
-        current_app.logger.error(f"SPARQL update failed for update_object_core_properties: {http_err} - Response: {response.text}")
-        return jsonify({"error": "SPARQL Update Error", "message": response.text, "status_code": response.status_code}), response.status_code
-    except requests.exceptions.RequestException as e:
-        current_app.logger.error(f"RequestException for update_object_core_properties: {str(e)}")
-        return jsonify({"error": "RequestException", "message": str(e)}), 500
     except Exception as e:
-        current_app.logger.error(f"Unexpected error in update_object_core_properties: {str(e)}")
-        return jsonify({"error": "Exception", "message": str(e)}), 500
-    
+        current_app.logger.error(f"Erro ao atualizar propriedades do objeto: {str(e)}")
+        # Captura as exceções levantadas por execute_sparql_update
+        if hasattr(e, 'args') and len(e.args) > 1 and isinstance(e.args[0], str) and "status" in e.args[0]:
+            status_code = int(e.args[0].split("status ")[1].split(" ")[0])
+            message = e.args[1]
+            return jsonify({"error": "SPARQL Update Error", "message": message}), status_code
+        elif "Network error" in str(e):
+            return jsonify({"error": "Network Error", "message": str(e)}), 500
+        else:
+            return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
+
 
 # A rota /add_relation original foi movida para /add (renomeada para add_rdf_relation)
 # A função add_relation que existia no final do arquivo original era uma cópia da lógica de /add
 # e não era um endpoint HTTP. Se for uma função helper, deve ser nomeada com _ e não ter rota.
 # Se for para ser um endpoint, precisa de @relationapi_app.route(...) e anotações.
 # Assumindo que a funcionalidade de adicionar relação genérica já está coberta por /add_rdf_relation
-

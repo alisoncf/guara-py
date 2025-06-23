@@ -1,10 +1,10 @@
-from flask import Blueprint, request, jsonify,current_app, g
-import requests, os
+from flask import Blueprint, request, jsonify, current_app, g
+import os
 import uuid
-from consultas import get_sparq_obj, get_prefix # get_prefix é usado implicitamente nas queries
-from config_loader import load_config
-from urllib.parse import urlencode
-from blueprints.auth import token_required # Importar o decorador de token
+# Importar as funções refatoradas de utils.py
+from utils import execute_sparql_query, execute_sparql_update
+from consultas import get_sparq_obj, get_prefix
+from blueprints.auth import token_required
 
 objectapi_app = Blueprint('objectapi_app', __name__) # Montado em /fis
 
@@ -110,43 +110,37 @@ def list_physical_objects(): # Renomeado de 'list'
         return jsonify({"error": "Method Not Allowed"}), 405
 
     keyword = data.get('keyword')
-    repo_sparql_endpoint = data.get('repository_sparql_endpoint') 
+    repo_sparql_endpoint = data.get('repository_sparql_endpoint')
 
-    if not keyword: 
+    if not keyword:
         return jsonify({"error": "Invalid input", "message": "Campo 'keyword' é obrigatório."}), 400
     if not repo_sparql_endpoint:
         return jsonify({"error": 'Invalid input', "message": "Campo 'repository_sparql_endpoint' é obrigatório."}), 400
-    
+
     repo_base_uri_inferred = repo_sparql_endpoint.rsplit('/', 1)[0] + "#"
 
     try:
         sparql_query = f'PREFIX : <{repo_base_uri_inferred}> ' + get_sparq_obj().replace('%keyword%', keyword)
-        
-        current_app.logger.debug(f"Querying {repo_sparql_endpoint} with SPARQL: {sparql_query}")
-        headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-                   'Accept': 'application/sparql-results+json,*/*;q=0.9',
-                   'X-Requested-With': 'XMLHttpRequest'}
-        payload_data = {'query': sparql_query}
-        encoded_payload = urlencode(payload_data)
-        
-        response = requests.post(repo_sparql_endpoint, headers=headers, data=encoded_payload, timeout=10)
-        response.raise_for_status() 
-        
-        result = response.json()
+
+        # Usando execute_sparql_query de utils.py
+        result = execute_sparql_query(repo_sparql_endpoint, sparql_query)
         return jsonify(result)
 
-    except requests.exceptions.HTTPError as http_err:
-        current_app.logger.error(f"SPARQL query failed for {repo_sparql_endpoint}: {http_err} - Response: {response.text}")
-        return jsonify({"error": f"SPARQL query failed with status {response.status_code}", "message": response.text}), response.status_code
-    except requests.exceptions.RequestException as e:
-        current_app.logger.error(f"RequestException for {repo_sparql_endpoint}: {str(e)}")
-        return jsonify({"error": "RequestException", "message": str(e)}), 500
     except Exception as e:
-        current_app.logger.error(f"Unexpected error in list_physical_objects: {str(e)}")
-        return jsonify({"error": "Exception", "message": str(e)}), 500
+        # Captura as exceções levantadas por execute_sparql_query
+        current_app.logger.error(f"Erro ao listar objetos físicos: {str(e)}")
+        # Verifica se a exceção contém informações de status e mensagem
+        if hasattr(e, 'args') and len(e.args) > 1 and isinstance(e.args[0], str) and "status" in e.args[0]:
+            status_code = int(e.args[0].split("status ")[1].split(" ")[0])
+            message = e.args[1]
+            return jsonify({"error": "SPARQL Query Error", "message": message}), status_code
+        elif "Network error" in str(e):
+            return jsonify({"error": "Network Error", "message": str(e)}), 500
+        else:
+            return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 @objectapi_app.route('/listar_arquivos', methods=['GET'])
-def list_files_for_physical_object(): 
+def list_files_for_physical_object():
     """
     Lista arquivos de mídia locais associados a um objeto físico e suas URIs
     correspondentes registradas em um repositório SPARQL via schema:associatedMedia.
@@ -208,16 +202,16 @@ def list_files_for_physical_object():
 
         if not repo_base_uri.endswith(('#', '/')):
             repo_base_uri += "#"
-        
+
         objeto_uri_completa = f"<{repo_base_uri}{objeto_id}>"
 
         upload_folder = current_app.config.get('UPLOAD_FOLDER')
         if not upload_folder:
             current_app.logger.error("UPLOAD_FOLDER não está configurado.")
             return jsonify({"error": "Server Configuration Error", "message": "UPLOAD_FOLDER não configurado."}), 500
-            
+
         objeto_folder_path = os.path.join(upload_folder, str(objeto_id))
-        
+
         arquivos_locais_lista = []
         if os.path.exists(objeto_folder_path) and os.path.isdir(objeto_folder_path):
             arquivos_locais_lista = os.listdir(objeto_folder_path)
@@ -225,32 +219,36 @@ def list_files_for_physical_object():
         sparql_query = f"""
             PREFIX schema: <http://schema.org/>
             SELECT ?objeto_associado_uri ?media_uri
-            WHERE {{ 
+            WHERE {{
                 {objeto_uri_completa} schema:associatedMedia ?media_uri .
                 BIND({objeto_uri_completa} AS ?objeto_associado_uri)
             }}
         """
-        headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'Accept': 'application/sparql-results+json,*/*;q=0.9', 'X-Requested-With': 'XMLHttpRequest'}
-        payload_data = {'query': sparql_query}
-        encoded_payload = urlencode(payload_data)
 
         midias_sparql_lista = []
         sparql_response_text = "N/A"
         sparql_response_status = "N/A"
 
         try:
-            response = requests.post(repo_sparql_endpoint, headers=headers, data=encoded_payload, timeout=10)
-            sparql_response_status = response.status_code
-            sparql_response_text = response.text
-            response.raise_for_status()
-            sparql_result_json = response.json()
+            # Usando execute_sparql_query de utils.py
+            sparql_result_json = execute_sparql_query(repo_sparql_endpoint, sparql_query)
             for item in sparql_result_json.get("results", {}).get("bindings", []):
                 midias_sparql_lista.append({
                     "media_uri": item.get("media_uri", {}).get("value"),
                     "objeto_associado_uri": item.get("objeto_associado_uri", {}).get("value")
                 })
-        except requests.exceptions.RequestException as e:
+        except Exception as e:
             current_app.logger.error(f"Erro na consulta SPARQL em list_files_for_physical_object: {str(e)}")
+            # Captura as exceções levantadas por execute_sparql_query
+            if hasattr(e, 'args') and len(e.args) > 1 and isinstance(e.args[0], str) and "status" in e.args[0]:
+                sparql_response_status = int(e.args[0].split("status ")[1].split(" ")[0])
+                sparql_response_text = e.args[1]
+                return jsonify({"error": "SPARQL Query HTTP Error", "message": str(e.args[1]), "details": sparql_response_text}), sparql_response_status
+            elif "Network error" in str(e):
+                return jsonify({"error": "Network Error", "message": str(e)}), 500
+            else:
+                return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
+
 
         arquivos_combinados_map = {
             nome: {"nome_arquivo_local": nome, "uri_sparql_correspondente": None, "presente_localmente": True, "presente_sparql": False}
@@ -265,7 +263,7 @@ def list_files_for_physical_object():
                 arquivos_combinados_map[nome_da_uri]["presente_sparql"] = True
             else:
                 arquivos_combinados_map[uri_s] = {"nome_arquivo_local": nome_da_uri, "uri_sparql_correspondente": uri_s, "presente_localmente": False, "presente_sparql": True}
-        
+
         return jsonify({
             "objeto_id_consultado": objeto_id,
             "path_pasta_uploads": objeto_folder_path if os.path.exists(objeto_folder_path) else "Pasta de uploads não encontrada.",
@@ -274,12 +272,6 @@ def list_files_for_physical_object():
             "arquivos_combinados": list(arquivos_combinados_map.values())
         })
 
-    except requests.exceptions.HTTPError as http_err:
-        current_app.logger.error(f"Erro HTTP na consulta SPARQL (listar_arquivos obj físico): {http_err}")
-        return jsonify({"error": "SPARQL Query HTTP Error", "message": str(http_err), "details": sparql_response_text}), sparql_response_status
-    except requests.exceptions.RequestException as req_err:
-        current_app.logger.error(f"Erro de Requisição (listar_arquivos obj físico): {req_err}")
-        return jsonify({"error": "RequestException", "message": f"Falha na comunicação com o endpoint SPARQL: {str(req_err)}"}), 500
     except Exception as e:
         current_app.logger.error(f"Erro inesperado em list_files_for_physical_object: {str(e)}")
         return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
@@ -287,7 +279,7 @@ def list_files_for_physical_object():
 
 @objectapi_app.route('/create', methods=['POST'])
 @token_required
-def create_physical_object(): 
+def create_physical_object():
     """
     Cria um novo objeto físico no repositório SPARQL.
     ---
@@ -303,8 +295,8 @@ def create_physical_object():
             type: object
             required:
               - titulo
-              - resumo 
-              - colecao_id 
+              - resumo
+              - colecao_id
               - repository_update_url
               - repository_base_uri
             properties:
@@ -325,7 +317,7 @@ def create_physical_object():
                 type: string
                 description: ID local da coleção à qual este objeto físico pertence. A URI da coleção será montada com a repository_base_uri.
                 example: "colecao_arqueologia"
-              temRelacao: 
+              temRelacao:
                 type: array
                 items:
                   type: string
@@ -333,7 +325,7 @@ def create_physical_object():
                 nullable: true
                 description: "Lista de URIs de outros recursos relacionados a este objeto."
                 example: ["http://example.org/obj/DocumentoRelacionado1"]
-              associatedMedia: 
+              associatedMedia:
                 type: array
                 items:
                   type: string
@@ -341,7 +333,7 @@ def create_physical_object():
                 nullable: true
                 description: "Lista de URIs de mídias associadas a este objeto."
                 example: ["http://example.org/media/foto_cadeira.jpg"]
-              tipoFisicoAbreviado: 
+              tipoFisicoAbreviado:
                 type: array
                 items:
                   type: string
@@ -381,7 +373,7 @@ def create_physical_object():
     for field in required_fields:
         if field not in data:
             return jsonify({"error": "Invalid input", "message": f"Campo '{field}' é obrigatório."}), 400
-    
+
     if not data['titulo'].strip():
         return jsonify({"error": "Invalid input", "message": "Campo 'titulo' não pode ser vazio."}), 400
 
@@ -392,63 +384,61 @@ def create_physical_object():
 
     object_id_uuid = str(uuid.uuid4())
     objeto_uri_completa = f"<{repo_base_uri}{object_id_uuid}>"
-    colecao_uri_completa = f"<{repo_base_uri}{data['colecao_id']}>" 
+    colecao_uri_completa = f"<{repo_base_uri}{data['colecao_id']}>"
 
     triples = [
         f"{objeto_uri_completa} rdf:type obj:ObjetoFisico",
         f"{objeto_uri_completa} dc:title \"\"\"{data['titulo'].replace('"""', '\\"""')}\"\"\"",
-        f"{objeto_uri_completa} dc:abstract \"\"\"{data['resumo'].replace('"""', '\\"""')}\"\"\"", 
+        f"{objeto_uri_completa} dc:abstract \"\"\"{data['resumo'].replace('"""', '\\"""')}\"\"\"",
         f"{objeto_uri_completa} obj:colecao {colecao_uri_completa}"
     ]
     if data.get('descricao'):
         triples.append(f"{objeto_uri_completa} dc:description \"\"\"{data['descricao'].replace('"""', '\\"""')}\"\"\"")
-    
+
     if data.get('temRelacao'):
         for rel_uri in data['temRelacao']:
-            triples.append(f"{objeto_uri_completa} obj:temRelacao <{rel_uri}>") 
-            
+            triples.append(f"{objeto_uri_completa} obj:temRelacao <{rel_uri}>")
+
     if data.get('associatedMedia'):
         for media_uri in data['associatedMedia']:
             triples.append(f"{objeto_uri_completa} schema:associatedMedia <{media_uri}>")
-            
+
     if data.get('tipoFisicoAbreviado'):
         for tipo_local in data['tipoFisicoAbreviado']:
-            tipo_uri_completa = f"<{repo_base_uri}{tipo_local.replace(' ', '_')}>" 
+            tipo_uri_completa = f"<{repo_base_uri}{tipo_local.replace(' ', '_')}>"
             triples.append(f"{objeto_uri_completa} obj:tipoFisico {tipo_uri_completa}")
 
-    sparql_query = f"""{get_prefix()}
+    sparql_update = f"""{get_prefix()}
         INSERT DATA {{
             { ' .\n'.join(triples) } .
         }}
     """
-    current_app.logger.debug(f"SPARQL Create Object Query: {sparql_query}")
-
-    headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest'}
-    payload = {'update': sparql_query}
-    encoded_data = urlencode(payload)
+    current_app.logger.debug(f"SPARQL Create Object Update: {sparql_update}")
 
     try:
-        response = requests.post(sparql_update_url, headers=headers, data=encoded_data, timeout=10)
-        response.raise_for_status()
+        # Usando execute_sparql_update de utils.py
+        execute_sparql_update(sparql_update_url, sparql_update)
         return jsonify({
-            "message": "Objeto físico adicionado com sucesso", 
+            "message": "Objeto físico adicionado com sucesso",
             "id": object_id_uuid,
             "object_uri": objeto_uri_completa.strip("<>")
         }), 201
-    except requests.exceptions.HTTPError as http_err:
-        current_app.logger.error(f"SPARQL update failed for create_physical_object: {http_err} - Response: {response.text}")
-        return jsonify({"error": "SPARQL Update Error", "message": response.text, "status_code": response.status_code}), response.status_code
-    except requests.exceptions.RequestException as e:
-        current_app.logger.error(f"RequestException for create_physical_object: {str(e)}")
-        return jsonify({"error": "RequestException", "message": str(e)}), 500
     except Exception as e:
-        current_app.logger.error(f"Unexpected error in create_physical_object: {str(e)}")
-        return jsonify({"error": "Exception", "message": str(e)}), 500
+        current_app.logger.error(f"Erro ao criar objeto físico: {str(e)}")
+        # Captura as exceções levantadas por execute_sparql_update
+        if hasattr(e, 'args') and len(e.args) > 1 and isinstance(e.args[0], str) and "status" in e.args[0]:
+            status_code = int(e.args[0].split("status ")[1].split(" ")[0])
+            message = e.args[1]
+            return jsonify({"error": "SPARQL Update Error", "message": message}), status_code
+        elif "Network error" in str(e):
+            return jsonify({"error": "Network Error", "message": str(e)}), 500
+        else:
+            return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 
-@objectapi_app.route('/delete', methods=['DELETE']) 
+@objectapi_app.route('/delete', methods=['DELETE'])
 @token_required
-def delete_physical_object(): 
+def delete_physical_object():
     """
     Exclui um objeto físico do repositório SPARQL usando sua URI completa.
     ---
@@ -501,39 +491,38 @@ def delete_physical_object():
 
     if not object_uri or not sparql_update_url:
         return jsonify({"error": "Invalid input", "message": "Campos 'object_uri_to_delete' e 'repository_update_url' são obrigatórios."}), 400
-    
+
     obj_uri_sparql = f"<{object_uri}>"
 
-    sparql_query = f"""{get_prefix()}
+    sparql_update = f"""{get_prefix()}
         DELETE WHERE {{
             {{ {obj_uri_sparql} ?p ?o . }}
             UNION
             {{ ?s ?p_inv {obj_uri_sparql} . }}
         }}
     """
-    current_app.logger.debug(f"SPARQL Delete Object Query: {sparql_query}")
-    headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest'}
-    payload = {'update': sparql_query}
-    encoded_data = urlencode(payload)
+    current_app.logger.debug(f"SPARQL Delete Object Update: {sparql_update}")
 
     try:
-        response = requests.post(sparql_update_url, headers=headers, data=encoded_data, timeout=10)
-        response.raise_for_status() 
+        # Usando execute_sparql_update de utils.py
+        execute_sparql_update(sparql_update_url, sparql_update)
         return jsonify({"message": "Objeto físico excluído com sucesso (ou não existia/nenhuma tripla afetada)", "object_uri": object_uri}), 200
-    except requests.exceptions.HTTPError as http_err:
-        current_app.logger.error(f"SPARQL update failed for delete_physical_object: {http_err} - Response: {response.text}")
-        return jsonify({"error": "SPARQL Update Error", "message": response.text, "status_code": response.status_code}), response.status_code
-    except requests.exceptions.RequestException as e:
-        current_app.logger.error(f"RequestException for delete_physical_object: {str(e)}")
-        return jsonify({"error": "RequestException", "message": str(e)}), 500
     except Exception as e:
-        current_app.logger.error(f"Unexpected error in delete_physical_object: {str(e)}")
-        return jsonify({"error": "Exception", "message": str(e)}), 500
+        current_app.logger.error(f"Erro ao excluir objeto físico: {str(e)}")
+        # Captura as exceções levantadas por execute_sparql_update
+        if hasattr(e, 'args') and len(e.args) > 1 and isinstance(e.args[0], str) and "status" in e.args[0]:
+            status_code = int(e.args[0].split("status ")[1].split(" ")[0])
+            message = e.args[1]
+            return jsonify({"error": "SPARQL Update Error", "message": message}), status_code
+        elif "Network error" in str(e):
+            return jsonify({"error": "Network Error", "message": str(e)}), 500
+        else:
+            return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 
-@objectapi_app.route('/remover_relacao', methods=['DELETE']) 
+@objectapi_app.route('/remover_relacao', methods=['DELETE'])
 @token_required
-def remove_relation_from_physical_object(): 
+def remove_relation_from_physical_object():
     """
     Remove uma relação RDF específica (tripla s-p-o) de um objeto físico.
     ---
@@ -549,9 +538,9 @@ def remove_relation_from_physical_object():
           schema:
             type: object
             required:
-              - s 
-              - p 
-              - o 
+              - s
+              - p
+              - o
               - repository_update_url
             properties:
               s:
@@ -591,40 +580,39 @@ def remove_relation_from_physical_object():
 
     s_uri = data.get('s')
     p_uri = data.get('p')
-    o_val = data.get('o') 
+    o_val = data.get('o')
     sparql_update_url = data.get('repository_update_url')
 
     if not all([s_uri, p_uri, o_val, sparql_update_url]):
         return jsonify({"error": "Invalid input", "message": "Campos 's', 'p', 'o', e 'repository_update_url' são obrigatórios."}), 400
 
-    sparql_query = f"""{get_prefix()}
+    sparql_update = f"""{get_prefix()}
         DELETE DATA {{
             {s_uri} {p_uri} {o_val} .
         }}
     """
-    current_app.logger.debug(f"SPARQL Remove Relation Query: {sparql_query}")
-    headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest'}
-    payload = {'update': sparql_query}
-    encoded_data = urlencode(payload)
+    current_app.logger.debug(f"SPARQL Remove Relation Update: {sparql_update}")
 
     try:
-        response = requests.post(sparql_update_url, headers=headers, data=encoded_data, timeout=10)
-        response.raise_for_status()
+        # Usando execute_sparql_update de utils.py
+        execute_sparql_update(sparql_update_url, sparql_update)
         return jsonify({"message": "Relação excluída com sucesso", "triple": f"{s_uri} {p_uri} {o_val} ."}), 200
-    except requests.exceptions.HTTPError as http_err:
-        current_app.logger.error(f"SPARQL update failed for remove_relation: {http_err} - Response: {response.text}")
-        return jsonify({"error": "SPARQL Update Error", "message": response.text, "status_code": response.status_code}), response.status_code
-    except requests.exceptions.RequestException as e:
-        current_app.logger.error(f"RequestException for remove_relation: {str(e)}")
-        return jsonify({"error": "RequestException", "message": str(e)}), 500
     except Exception as e:
-        current_app.logger.error(f"Unexpected error in remove_relation: {str(e)}")
-        return jsonify({"error": "Exception", "message": str(e)}), 500
+        current_app.logger.error(f"Erro ao remover relação: {str(e)}")
+        # Captura as exceções levantadas por execute_sparql_update
+        if hasattr(e, 'args') and len(e.args) > 1 and isinstance(e.args[0], str) and "status" in e.args[0]:
+            status_code = int(e.args[0].split("status ")[1].split(" ")[0])
+            message = e.args[1]
+            return jsonify({"error": "SPARQL Update Error", "message": message}), status_code
+        elif "Network error" in str(e):
+            return jsonify({"error": "Network Error", "message": str(e)}), 500
+        else:
+            return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 
-@objectapi_app.route('/update', methods=['PUT','POST']) 
+@objectapi_app.route('/update', methods=['PUT','POST'])
 @token_required
-def update_physical_object(): 
+def update_physical_object():
     """
     Atualiza um objeto físico existente no repositório SPARQL.
     ---
@@ -639,9 +627,9 @@ def update_physical_object():
           schema:
             type: object
             required:
-              - object_uri_to_update 
+              - object_uri_to_update
               - titulo
-              - resumo 
+              - resumo
               - repository_update_url
             properties:
               object_uri_to_update:
@@ -661,12 +649,12 @@ def update_physical_object():
                 type: string
                 nullable: true
                 description: "Nova descrição detalhada (opcional, substitui a antiga se fornecida, remove se vazia/null)."
-              colecao_id: 
+              colecao_id:
                 type: string
                 nullable: true
                 description: "ID local da nova coleção. Se fornecido, remove a antiga e adiciona esta."
                 example: "colecao_restaurados"
-              tipoFisicoAbreviado: 
+              tipoFisicoAbreviado:
                 type: array
                 items:
                   type: string
@@ -678,10 +666,10 @@ def update_physical_object():
                 format: uri
                 description: "URL do endpoint SPARQL de atualização."
                 example: "http://localhost:3030/mydataset/update"
-              repository_base_uri: 
+              repository_base_uri:
                 type: string
                 format: uri
-                nullable: true 
+                nullable: true
                 description: "URI base para montar URIs de coleção e tipos físicos, se IDs locais forem fornecidos."
                 example: "http://localhost:3030/mydataset#"
     responses:
@@ -706,13 +694,13 @@ def update_physical_object():
 
     obj_uri_param = data.get('object_uri_to_update')
     sparql_update_url = data.get('repository_update_url')
-    
+
     if not all([obj_uri_param, sparql_update_url, data.get('titulo'), data.get('resumo')]):
         return jsonify({"error": "Invalid input", "message": "Campos 'object_uri_to_update', 'repository_update_url', 'titulo' e 'resumo' são obrigatórios."}), 400
 
     obj_uri_sparql = f"<{obj_uri_param}>"
-    
-    delete_clauses = [ 
+
+    delete_clauses = [
         f"{obj_uri_sparql} dc:title ?oldTitle .",
         f"{obj_uri_sparql} dc:abstract ?oldAbstract ."
     ]
@@ -728,9 +716,9 @@ def update_physical_object():
     if 'descricao' in data:
         delete_clauses.append(f"{obj_uri_sparql} dc:description ?oldDescription .")
         where_optional_clauses.append(f"OPTIONAL {{ {obj_uri_sparql} dc:description ?oldDescription . }}")
-        if data['descricao'] is not None and data['descricao'].strip() != "": 
+        if data['descricao'] is not None and data['descricao'].strip() != "":
             insert_clauses.append(f"{obj_uri_sparql} dc:description \"\"\"{data['descricao'].replace('"""', '\\"""')}\"\"\"")
-    
+
     repo_base_uri = data.get('repository_base_uri')
     if ('colecao_id' in data and data['colecao_id'] is not None) or \
        ('tipoFisicoAbreviado' in data and data['tipoFisicoAbreviado'] is not None):
@@ -746,20 +734,20 @@ def update_physical_object():
             nova_colecao_uri = f"<{repo_base_uri}{data['colecao_id']}>"
             insert_clauses.append(f"{obj_uri_sparql} obj:colecao {nova_colecao_uri}")
 
-    if 'tipoFisicoAbreviado' in data and data['tipoFisicoAbreviado'] is not None: 
-        delete_clauses.append(f"{obj_uri_sparql} obj:tipoFisico ?oldTipoFisico .") 
+    if 'tipoFisicoAbreviado' in data and data['tipoFisicoAbreviado'] is not None:
+        delete_clauses.append(f"{obj_uri_sparql} obj:tipoFisico ?oldTipoFisico .")
         where_optional_clauses.append(f"OPTIONAL {{ {obj_uri_sparql} obj:tipoFisico ?oldTipoFisico . }}")
         if isinstance(data['tipoFisicoAbreviado'], list):
             for tipo_local in data['tipoFisicoAbreviado']:
                 if tipo_local and tipo_local.strip() != "":
                     novo_tipo_uri = f"<{repo_base_uri}{tipo_local.replace(' ', '_')}>"
                     insert_clauses.append(f"{obj_uri_sparql} obj:tipoFisico {novo_tipo_uri}")
-    
+
     delete_block = "\n".join(delete_clauses)
-    insert_block = " ;\n".join(insert_clauses) 
+    insert_block = " ;\n".join(insert_clauses)
     where_block = "\n".join(where_optional_clauses)
 
-    sparql_query = f"""{get_prefix()}
+    sparql_update = f"""{get_prefix()}
         DELETE {{
             {delete_block}
         }}
@@ -767,48 +755,44 @@ def update_physical_object():
             {insert_block} .
         }}
         WHERE {{
-            {obj_uri_sparql} rdf:type obj:ObjetoFisico . 
+            {obj_uri_sparql} rdf:type obj:ObjetoFisico .
             {where_block}
         }}
     """
-    current_app.logger.debug(f"SPARQL Update Object Query: {sparql_query}")
-    headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest'}
-    payload = {'update': sparql_query}
-    encoded_data = urlencode(payload)
+    current_app.logger.debug(f"SPARQL Update Object Update: {sparql_update}")
 
     try:
-        response = requests.post(sparql_update_url, headers=headers, data=encoded_data, timeout=10)
-        response.raise_for_status()
+        # Usando execute_sparql_update de utils.py
+        execute_sparql_update(sparql_update_url, sparql_update)
         return jsonify({"message": "Objeto físico atualizado com sucesso", "object_uri": obj_uri_param}), 200
-    except requests.exceptions.HTTPError as http_err:
-        current_app.logger.error(f"SPARQL update failed for update_physical_object: {http_err} - Response: {response.text}")
-        return jsonify({"error": "SPARQL Update Error", "message": response.text, "status_code": response.status_code}), response.status_code
-    except requests.exceptions.RequestException as e:
-        current_app.logger.error(f"RequestException for update_physical_object: {str(e)}")
-        return jsonify({"error": "RequestException", "message": str(e)}), 500
     except Exception as e:
-        current_app.logger.error(f"Unexpected error in update_physical_object: {str(e)}")
-        return jsonify({"error": "Exception", "message": str(e)}), 500
+        current_app.logger.error(f"Erro ao atualizar objeto físico: {str(e)}")
+        # Captura as exceções levantadas por execute_sparql_update
+        if hasattr(e, 'args') and len(e.args) > 1 and isinstance(e.args[0], str) and "status" in e.args[0]:
+            status_code = int(e.args[0].split("status ")[1].split(" ")[0])
+            message = e.args[1]
+            return jsonify({"error": "SPARQL Update Error", "message": message}), status_code
+        elif "Network error" in str(e):
+            return jsonify({"error": "Network Error", "message": str(e)}), 500
+        else:
+            return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 def _internal_add_relation(sujeito_uri_completa, predicado_uri_completa, objeto_uri_ou_literal, sparql_update_url):
     """Função interna para adicionar uma relação. Assume URIs/literais já formatados."""
-    sparql_query = f"""{get_prefix()}
+    sparql_update = f"""{get_prefix()}
         INSERT DATA {{
             {sujeito_uri_completa} {predicado_uri_completa} {objeto_uri_ou_literal} .
         }}
     """
-    current_app.logger.debug(f"Internal Add Relation SPARQL: {sparql_query}")
-    headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest'}
-    payload = {'update': sparql_query}
-    encoded_data = urlencode(payload)
-    
-    response = requests.post(sparql_update_url, headers=headers, data=encoded_data, timeout=10)
-    response.raise_for_status() 
-    return response 
+    current_app.logger.debug(f"Internal Add Relation SPARQL Update: {sparql_update}")
+
+    # Usando execute_sparql_update de utils.py
+    execute_sparql_update(sparql_update_url, sparql_update)
+    return True # Retorna True para indicar sucesso, se execute_sparql_update não levantar exceção
 
 @objectapi_app.route('/adicionar_relacao', methods=['POST'])
-@token_required 
-def add_relation_to_physical_object(): 
+@token_required
+def add_relation_to_physical_object():
     """
     Adiciona uma relação RDF (tripla s-p-o) onde o sujeito é um objeto físico.
     ---
@@ -824,9 +808,9 @@ def add_relation_to_physical_object():
           schema:
             type: object
             required:
-              - sujeito_uri 
-              - predicado_uri 
-              - objeto_uri_ou_literal 
+              - sujeito_uri
+              - predicado_uri
+              - objeto_uri_ou_literal
               - repository_update_url
             properties:
               sujeito_uri:
@@ -847,7 +831,7 @@ def add_relation_to_physical_object():
                 type: string
                 format: uri
                 description: "URL do endpoint SPARQL de atualização."
-                example: "http://localhost:3030/mydataset/update"
+                example: "http://localhost:3030/mydat3030/mydataset/update"
     responses:
       201:
         description: Relação adicionada com sucesso.
@@ -877,13 +861,14 @@ def add_relation_to_physical_object():
     try:
         _internal_add_relation(s_uri, p_uri, o_val, sparql_update_url)
         return jsonify({"message": "Relação adicionada com sucesso", "triple": f"{s_uri} {p_uri} {o_val} ."}), 201
-    except requests.exceptions.HTTPError as http_err:
-        response_obj = http_err.response
-        current_app.logger.error(f"SPARQL update failed for add_relation_to_physical_object: {http_err} - Response: {response_obj.text}")
-        return jsonify({"error": "SPARQL Update Error", "message": response_obj.text, "status_code": response_obj.status_code}), response_obj.status_code
-    except requests.exceptions.RequestException as e:
-        current_app.logger.error(f"RequestException for add_relation_to_physical_object: {str(e)}")
-        return jsonify({"error": "RequestException", "message": str(e)}), 500
     except Exception as e:
-        current_app.logger.error(f"Unexpected error in add_relation_to_physical_object: {str(e)}")
-        return jsonify({"error": "Exception", "message": str(e)}), 500
+        current_app.logger.error(f"Erro ao adicionar relação a objeto físico: {str(e)}")
+        # Captura as exceções levantadas por _internal_add_relation (que usa execute_sparql_update)
+        if hasattr(e, 'args') and len(e.args) > 1 and isinstance(e.args[0], str) and "status" in e.args[0]:
+            status_code = int(e.args[0].split("status ")[1].split(" ")[0])
+            message = e.args[1]
+            return jsonify({"error": "SPARQL Update Error", "message": message}), status_code
+        elif "Network error" in str(e):
+            return jsonify({"error": "Network Error", "message": str(e)}), 500
+        else:
+            return jsonify({"error": "Internal Server Error", "message": str(e)}), 500

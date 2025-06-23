@@ -1,10 +1,9 @@
-from flask import Blueprint, request, jsonify,current_app
-import requests, os
+from flask import Blueprint, request, jsonify, current_app
+import os
 import uuid
-# Importe suas funções corretamente
-from consultas import get_sparq_all,get_sparq_dim, get_prefix # get_prefix é usado implicitamente nas queries
-from config_loader import load_config
-from urllib.parse import urlencode
+# Importar as funções refatoradas de utils.py
+from utils import execute_sparql_query, execute_sparql_update
+from consultas import get_sparq_all, get_sparq_dim, get_prefix
 from blueprints.auth import token_required # Importar o decorador de token
 
 dimapi_app = Blueprint('dimapi_app', __name__)
@@ -144,27 +143,22 @@ def list_dimensional_objects(): # Renomeado de 'list' para maior clareza
     try:
         # A query get_sparq_dim já filtra por obj:Pessoa, obj:Tempo, obj:Lugar, obj:Evento
         sparql_query = f'PREFIX : <{repo}#> ' + get_sparq_dim().replace('%keyword%', keyword)
-        
-        headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-                   'Accept': 'application/sparql-results+json,*/*;q=0.9',
-                   'X-Requested-With': 'XMLHttpRequest'}
-        payload_data = {'query': sparql_query} # Renomeado para evitar conflito com 'data' do request
-        encoded_payload = urlencode(payload_data)
-        
-        response = requests.post(sparqapi_url, headers=headers, data=encoded_payload)
-        
-        if response.status_code == 200:
-            result = response.json()
-            return jsonify(result)
-        else:
-            return jsonify({"error": f"SPARQL query failed with status {response.status_code}", "message": response.text}), response.status_code
 
-    except requests.exceptions.RequestException as e:
-        return jsonify({"error": "RequestException", "message": str(e)}), 500
-    except KeyError as e:
-        return jsonify({"error": "KeyError", "message": f"Missing expected field: {str(e)}"}), 400
+        # Usando execute_sparql_query de utils.py
+        result = execute_sparql_query(sparqapi_url, sparql_query)
+        return jsonify(result)
+
     except Exception as e:
-        return jsonify({"error": "Exception", "message": str(e)}), 500
+        current_app.logger.error(f"Erro ao listar objetos dimensionais: {str(e)}")
+        # Captura as exceções levantadas por execute_sparql_query
+        if hasattr(e, 'args') and len(e.args) > 1 and isinstance(e.args[0], str) and "status" in e.args[0]:
+            status_code = int(e.args[0].split("status ")[1].split(" ")[0])
+            message = e.args[1]
+            return jsonify({"error": "SPARQL Query Error", "message": message}), status_code
+        elif "Network error" in str(e):
+            return jsonify({"error": "Network Error", "message": str(e)}), 500
+        else:
+            return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 @dimapi_app.route('/listall', methods=['GET','POST'])
 def list_all_dimensional_or_physical(): # Renomeado de 'list_all'
@@ -291,7 +285,7 @@ def list_all_dimensional_or_physical(): # Renomeado de 'list_all'
         return jsonify({"error": 'Invalid input', "message": "Campo 'repository' é obrigatório."}), 400
 
     sparqapi_url = repo
-    
+
     # Mapeamento do parâmetro 'type' para o filtro SPARQL
     # Se tipo_param for vazio, replace_tipo também será, e a query original get_sparq_all não filtrará por um tipo específico.
     replace_tipo = {
@@ -307,26 +301,21 @@ def list_all_dimensional_or_physical(): # Renomeado de 'list_all'
         sparql_query = sparql_query.replace('%keyword%', keyword)
         sparql_query = sparql_query.replace('%tipo%', replace_tipo) # %tipo% será substituído por vazio se tipo_param não corresponder
 
-        headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-                   'Accept': 'application/sparql-results+json,*/*;q=0.9',
-                   'X-Requested-With': 'XMLHttpRequest'}
-        payload_data = {'query': sparql_query}
-        encoded_payload = urlencode(payload_data)
-        
-        response = requests.post(sparqapi_url, headers=headers, data=encoded_payload)
-        
-        if response.status_code == 200:
-            result = response.json()
-            return jsonify(result)
-        else:
-            return jsonify({"error": f"SPARQL query failed with status {response.status_code}", "message": response.text}), response.status_code
+        # Usando execute_sparql_query de utils.py
+        result = execute_sparql_query(sparqapi_url, sparql_query)
+        return jsonify(result)
 
-    except requests.exceptions.RequestException as e:
-        return jsonify({"error": "RequestException", "message": str(e)}), 500
-    except KeyError as e:
-        return jsonify({"error": "KeyError", "message": f"Missing expected field: {str(e)}"}), 400
     except Exception as e:
-        return jsonify({"error": "Exception", "message": str(e)}), 500
+        current_app.logger.error(f"Erro ao listar todos os objetos: {str(e)}")
+        # Captura as exceções levantadas por execute_sparql_query
+        if hasattr(e, 'args') and len(e.args) > 1 and isinstance(e.args[0], str) and "status" in e.args[0]:
+            status_code = int(e.args[0].split("status ")[1].split(" ")[0])
+            message = e.args[1]
+            return jsonify({"error": "SPARQL Query Error", "message": message}), status_code
+        elif "Network error" in str(e):
+            return jsonify({"error": "Network Error", "message": str(e)}), 500
+        else:
+            return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 
 @dimapi_app.route('/listar_arquivos', methods=['GET'])
@@ -416,17 +405,17 @@ def listar_arquivos_objeto_dimensional(): # Renomeado de 'listar_arquivos'
         if not repo_sparql_url:
             return jsonify({"error": "Invalid input", "message": "Parâmetro 'repositorio' (URL do endpoint SPARQL) é obrigatório."}), 400
 
-        
+
         upload_folder = current_app.config.get('UPLOAD_FOLDER')
         if not upload_folder:
             return jsonify({"error": "Server Configuration Error", "message": "UPLOAD_FOLDER não configurado."}), 500
-            
+
         objeto_folder_path = os.path.join(upload_folder, str(objeto_id))
-        
+
         arquivos_locais_lista = []
         if os.path.exists(objeto_folder_path) and os.path.isdir(objeto_folder_path):
             arquivos_locais_lista = os.listdir(objeto_folder_path)
-        
+
         # A query SPARQL precisa da URI base do repositório para construir :objeto_id
         # Vamos assumir que repo_sparql_url é o endpoint de query, e precisamos inferir a base_uri
         # Esta é uma simplificação; idealmente, a base_uri seria configurada ou passada.
@@ -438,28 +427,19 @@ def listar_arquivos_objeto_dimensional(): # Renomeado de 'listar_arquivos'
             PREFIX schema: <http://schema.org/>
             PREFIX : <{repo_base_uri_inferred}>
             SELECT ?s ?media_uri
-            WHERE {{ 
+            WHERE {{
                 :{objeto_id} schema:associatedMedia ?media_uri .
                 BIND(:{objeto_id} AS ?s) # Para manter a estrutura da resposta original que tinha ?a
             }}
         """
-        headers = {
-            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-            'Accept': 'application/sparql-results+json,*/*;q=0.9',
-            'X-Requested-With': 'XMLHttpRequest'
-        }
-        payload_data = {'query': sparql_query}
-        encoded_payload = urlencode(payload_data)
-
-        response = requests.post(repo_sparql_url, headers=headers, data=encoded_payload)
 
         sparql_result_json = {}
-        if response.status_code == 200:
-            sparql_result_json = response.json()
-        else:
+        try:
+            # Usando execute_sparql_query de utils.py
+            sparql_result_json = execute_sparql_query(repo_sparql_url, sparql_query)
+        except Exception as e:
+            current_app.logger.warning(f"Aviso: Consulta SPARQL para mídias associadas falhou: {str(e)}")
             # Não retornar erro fatal aqui, pode haver arquivos locais mesmo sem SPARQL
-            print(f"Aviso: Consulta SPARQL para mídias associadas falhou: {response.status_code} - {response.text}")
-
 
         arquivos_map = {nome: {"nome": nome, "uri": None} for nome in arquivos_locais_lista}
 
@@ -469,25 +449,25 @@ def listar_arquivos_objeto_dimensional(): # Renomeado de 'listar_arquivos'
                 # Tenta extrair o nome do arquivo da URI para correspondência
                 # Isso é uma heurística e pode precisar de ajuste dependendo da estrutura da URI da mídia
                 nome_arquivo_da_uri = media_uri_value.split("/")[-1]
-                
+
                 if nome_arquivo_da_uri in arquivos_map:
                     arquivos_map[nome_arquivo_da_uri]["uri"] = media_uri_value
                 else: # Mídia existe no SPARQL mas não localmente (ou nome não bate)
                     arquivos_map[nome_arquivo_da_uri] = {"nome": nome_arquivo_da_uri, "uri": media_uri_value}
-        
+
         arquivos_combinados_lista = list(arquivos_map.values())
-        
+
         return jsonify({
             "arquivos_locais": arquivos_locais_lista,
             "arquivos_sparql": sparql_result_json, # Retorna o resultado bruto do SPARQL também
             "arquivos_combinados": arquivos_combinados_lista,
             "path_folder": objeto_folder_path,
         })
-        
-    except requests.exceptions.RequestException as e:
-        return jsonify({"error": "RequestException", "message": str(e)}), 500
+
     except Exception as e:
-        return jsonify({"error": "Exception", "message": str(e)}), 500
+        current_app.logger.error(f"Erro inesperado em listar_arquivos_objeto_dimensional: {str(e)}")
+        # Captura outras exceções não relacionadas ao SPARQL
+        return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 @dimapi_app.route('/create', methods=['POST'])
 @token_required # Protegendo o endpoint
@@ -606,7 +586,7 @@ def create_dimensional_object(): # Renomeado de 'create'
     for field in required_fields:
         if field not in data:
             return jsonify({"error": "Invalid input", "message": f"Campo '{field}' é obrigatório."}), 400
-    
+
     sparql_update_url = data['repository_update_url']
     repo_base_uri = data['repository_base_uri']
     if not repo_base_uri.endswith(('#', '/')):
@@ -614,9 +594,9 @@ def create_dimensional_object(): # Renomeado de 'create'
 
     object_id = str(uuid.uuid4())
     objeto_uri_completa = f"<{repo_base_uri}{object_id}>"
-    
+
     tipo_obj_uri = f"<{data['tipo_uri']}>" # URI completa do tipo (ex: <http://...#Pessoa>)
-    
+
     # Construção das partes da query
     triples = [
         f"{objeto_uri_completa} rdf:type {tipo_obj_uri}",
@@ -634,41 +614,41 @@ def create_dimensional_object(): # Renomeado de 'create'
             triples.append(f"{objeto_uri_completa} geo:long \"{lon}\"")
         except ValueError:
             return jsonify({"error": "Invalid input", "message": "Formato de 'coordenadas' inválido. Use 'latitude,longitude'."}), 400
-            
+
     if data.get('temRelacao'):
         for rel_uri in data['temRelacao']:
             triples.append(f"{objeto_uri_completa} obj:temRelacao <{rel_uri}>") # Usando obj:temRelacao ou similar
-            
+
     if data.get('associatedMedia'):
         for media_uri in data['associatedMedia']:
             triples.append(f"{objeto_uri_completa} schema:associatedMedia <{media_uri}>")
 
-    sparql_query = f"""{get_prefix()}
+    sparql_update = f"""{get_prefix()}
         INSERT DATA {{
             { ' .\n'.join(triples) } .
         }}
     """
-
-    headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-               'Accept': 'application/sparql-results+json,*/*;q=0.9',
-               'X-Requested-With': 'XMLHttpRequest'}
-    payload = {'update': sparql_query}
-    encoded_data = urlencode(payload)
+    current_app.logger.debug(f"SPARQL Create Dimensional Object Update: {sparql_update}")
 
     try:
-        response = requests.post(sparql_update_url, headers=headers, data=encoded_data)
-        if response.status_code == 200 or response.status_code == 204:
-            return jsonify({
-                "message": "Objeto dimensional adicionado com sucesso", 
-                "id": object_id,
-                "object_uri": objeto_uri_completa.strip("<>")
-            }), 201
-        else:
-            return jsonify({"error": "SPARQL Update Error", "message": response.text, "status_code": response.status_code}), response.status_code
-    except requests.exceptions.RequestException as e:
-        return jsonify({"error": "RequestException", "message": str(e)}), 500
+        # Usando execute_sparql_update de utils.py
+        execute_sparql_update(sparql_update_url, sparql_update)
+        return jsonify({
+            "message": "Objeto dimensional adicionado com sucesso",
+            "id": object_id,
+            "object_uri": objeto_uri_completa.strip("<>")
+        }), 201
     except Exception as e:
-        return jsonify({"error": "Exception", "message": str(e)}), 500
+        current_app.logger.error(f"Erro ao criar objeto dimensional: {str(e)}")
+        # Captura as exceções levantadas por execute_sparql_update
+        if hasattr(e, 'args') and len(e.args) > 1 and isinstance(e.args[0], str) and "status" in e.args[0]:
+            status_code = int(e.args[0].split("status ")[1].split(" ")[0])
+            message = e.args[1]
+            return jsonify({"error": "SPARQL Update Error", "message": message}), status_code
+        elif "Network error" in str(e):
+            return jsonify({"error": "Network Error", "message": str(e)}), 500
+        else:
+            return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 
 @dimapi_app.route('/delete', methods=['DELETE','POST']) # Manter POST se necessário, DELETE é mais semântico
@@ -755,7 +735,7 @@ def excluir_dimensional_object(): # Renomeado de 'excluir'
 
     if not object_identifier or not sparql_update_url:
         return jsonify({"error": "Invalid input", "message": "Campos 'object_uri_to_delete' e 'repository_update_url' são obrigatórios."}), 400
-    
+
     # Construir URI completa se necessário
     if "://" in object_identifier: # Heurística para checar se é uma URI completa
         objeto_uri_sparql = f"<{object_identifier}>"
@@ -767,41 +747,30 @@ def excluir_dimensional_object(): # Renomeado de 'excluir'
         return jsonify({"error": "Invalid input", "message": "Se 'object_uri_to_delete' for um ID local, 'repository_base_uri' é obrigatório."}), 400
 
     # Query para deletar todas as triplas onde o objeto é sujeito E onde ele é objeto
-    # ATENÇÃO: Deletar onde é objeto pode ter efeitos colaterais amplos.
-    # A query original deletava apenas onde era sujeito: {objeto_uri} ?p ?o .
-    sparql_query = f"""
+    sparql_update = f"""
         DELETE WHERE {{
             {{ {objeto_uri_sparql} ?p ?o . }}
             UNION
             {{ ?s ?p_inv {objeto_uri_sparql} . }}
         }}
     """
-    # Se quiser manter a exclusão apenas das triplas onde o objeto é sujeito:
-    # sparql_query = f"""
-    #     DELETE WHERE {{
-    #         {objeto_uri_sparql} ?p ?o .
-    #     }}
-    # """
-
-    headers = {
-        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-        'Accept': 'application/sparql-results+json,*/*;q=0.9',
-        'X-Requested-With': 'XMLHttpRequest'
-    }
-    payload = {'update': sparql_query}
-    encoded_data = urlencode(payload)
+    current_app.logger.debug(f"SPARQL Delete Dimensional Object Update: {sparql_update}")
 
     try:
-        # Adicionar uma query ASK para verificar se o objeto existe antes de deletar, para retornar 404
-        response = requests.post(sparql_update_url, headers=headers, data=encoded_data)
-        if response.status_code == 200 or response.status_code == 204:
-            return jsonify({"message": "Objeto excluído com sucesso", "object_uri": objeto_uri_sparql.strip("<>")}), 200
-        else:
-            return jsonify({"error": "SPARQL Update Error", "message": response.text, "status_code": response.status_code}), response.status_code
-    except requests.exceptions.RequestException as e:
-        return jsonify({"error": "RequestException", "message": str(e)}), 500
+        # Usando execute_sparql_update de utils.py
+        execute_sparql_update(sparql_update_url, sparql_update)
+        return jsonify({"message": "Objeto excluído com sucesso", "object_uri": objeto_uri_sparql.strip("<>")}), 200
     except Exception as e:
-        return jsonify({"error": "Exception", "message": str(e)}), 500
+        current_app.logger.error(f"Erro ao excluir objeto dimensional: {str(e)}")
+        # Captura as exceções levantadas por execute_sparql_update
+        if hasattr(e, 'args') and len(e.args) > 1 and isinstance(e.args[0], str) and "status" in e.args[0]:
+            status_code = int(e.args[0].split("status ")[1].split(" ")[0])
+            message = e.args[1]
+            return jsonify({"error": "SPARQL Update Error", "message": message}), status_code
+        elif "Network error" in str(e):
+            return jsonify({"error": "Network Error", "message": str(e)}), 500
+        else:
+            return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 @dimapi_app.route('/remover_relacao', methods=['DELETE','POST']) # Manter POST se necessário
 @token_required
@@ -836,6 +805,7 @@ def remover_relacao_dimensional(): # Renomeado de 'remover_relacao'
                 example: "<http://schema.org/knows>"
               o:
                 type: string
+                # Pode ser URI ou Literal. Se literal, deve ser formatado (ex "Texto" ou "10"^^xsd:integer)
                 description: "URI completa ou Literal RDF do objeto da tripla (ex <http://example.org/o1> ou 'Literal')."
                 example: "<http://example.org/pessoa/PessoaB>"
               repository_update_url:
@@ -882,43 +852,29 @@ def remover_relacao_dimensional(): # Renomeado de 'remover_relacao'
 
     if not all([s, p, o, sparql_update_url]):
         return jsonify({"error": "Invalid input", "message": "Campos 's', 'p', 'o' e 'repository_update_url' são obrigatórios."}), 400
-    
-    # Validação básica se s, p, o parecem URIs ou literais bem formados (simplificado)
-    # Idealmente, o cliente envia a tripla já formatada para SPARQL.
-    # Ex: s = "<http://example.org/res/1>", p = "<http://example.org/prop/rel>", o = "\"Some Value\"@en"
 
-    sparql_query = f"""
+    sparql_update = f"""
         DELETE DATA {{
             {s} {p} {o} .
         }}
     """
-    # Nota: DELETE DATA é mais específico que DELETE WHERE { {s} {p} {o} } se a tripla exata é conhecida.
-    # Se houver variáveis ou a tripla não for exata, DELETE WHERE é mais flexível.
-    # A query original usava DELETE WHERE. Para consistência com isso:
-    # sparql_query = f"""
-    #     DELETE WHERE {{
-    #         {s} {p} {o} .
-    #     }}
-    # """
-    
-    headers = {
-        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-        'Accept': 'application/sparql-results+json,*/*;q=0.9',
-        'X-Requested-With': 'XMLHttpRequest'
-    }
-    payload = {'update': sparql_query}
-    encoded_data = urlencode(payload)
+    current_app.logger.debug(f"SPARQL Remove Relation Dimensional Update: {sparql_update}")
 
     try:
-        response = requests.post(sparql_update_url, headers=headers, data=encoded_data)
-        if response.status_code == 200 or response.status_code == 204:
-            return jsonify({"message": "Relação excluída com sucesso", "triple": f"{s} {p} {o}"}), 200
-        else:
-            return jsonify({"error": "SPARQL Update Error", "message": response.text, "status_code": response.status_code}), response.status_code
-    except requests.exceptions.RequestException as e:
-        return jsonify({"error": "RequestException", "message": str(e)}), 500
+        # Usando execute_sparql_update de utils.py
+        execute_sparql_update(sparql_update_url, sparql_update)
+        return jsonify({"message": "Relação excluída com sucesso", "triple": f"{s} {p} {o}"}), 200
     except Exception as e:
-        return jsonify({"error": "Exception", "message": str(e)}), 500
+        current_app.logger.error(f"Erro ao remover relação dimensional: {str(e)}")
+        # Captura as exceções levantadas por execute_sparql_update
+        if hasattr(e, 'args') and len(e.args) > 1 and isinstance(e.args[0], str) and "status" in e.args[0]:
+            status_code = int(e.args[0].split("status ")[1].split(" ")[0])
+            message = e.args[1]
+            return jsonify({"error": "SPARQL Update Error", "message": message}), status_code
+        elif "Network error" in str(e):
+            return jsonify({"error": "Network Error", "message": str(e)}), 500
+        else:
+            return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 @dimapi_app.route('/update', methods=['PUT', 'POST']) # PUT é mais semântico para update completo
 @token_required
@@ -1020,7 +976,7 @@ def update_dimensional_object(): # Renomeado de 'update'
         return jsonify({"error": "Invalid input", "message": "Campos 'object_uri_to_update', 'repository_update_url', 'titulo' e 'resumo' são obrigatórios."}), 400
 
     obj_uri_sparql = f"<{object_uri}>"
-    
+
     # Construção dos blocos DELETE e INSERT
     delete_clauses = []
     insert_clauses = [
@@ -1053,7 +1009,7 @@ def update_dimensional_object(): # Renomeado de 'update'
     insert_block = " ;\n".join(insert_clauses) # Junta as triplas de insert com ;
     where_block = "\n".join(where_clauses)
 
-    sparql_query = f"""{get_prefix()}
+    sparql_update = f"""{get_prefix()}
         DELETE {{
             {delete_block}
         }}
@@ -1065,24 +1021,23 @@ def update_dimensional_object(): # Renomeado de 'update'
             {where_block}
         }}
     """
-    
-    headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-               'Accept': 'application/sparql-results+json,*/*;q=0.9',
-               'X-Requested-With': 'XMLHttpRequest'}
-    payload = {'update': sparql_query}
-    encoded_data = urlencode(payload)
+    current_app.logger.debug(f"SPARQL Update Dimensional Object Update: {sparql_update}")
 
     try:
-        # Adicionar query ASK para verificar se o objeto existe antes, para retornar 404
-        response = requests.post(sparql_update_url, headers=headers, data=encoded_data)
-        if response.status_code == 200 or response.status_code == 204:
-            return jsonify({"message": "Objeto atualizado com sucesso", "object_uri": object_uri}), 200
-        else:
-            return jsonify({"error": "SPARQL Update Error", "message": response.text, "status_code": response.status_code}), response.status_code
-    except requests.exceptions.RequestException as e:
-        return jsonify({"error": "RequestException", "message": str(e)}), 500
+        # Usando execute_sparql_update de utils.py
+        execute_sparql_update(sparql_update_url, sparql_update)
+        return jsonify({"message": "Objeto atualizado com sucesso", "object_uri": object_uri}), 200
     except Exception as e:
-        return jsonify({"error": "Exception", "message": str(e)}), 500
+        current_app.logger.error(f"Erro ao atualizar objeto dimensional: {str(e)}")
+        # Captura as exceções levantadas por execute_sparql_update
+        if hasattr(e, 'args') and len(e.args) > 1 and isinstance(e.args[0], str) and "status" in e.args[0]:
+            status_code = int(e.args[0].split("status ")[1].split(" ")[0])
+            message = e.args[1]
+            return jsonify({"error": "SPARQL Update Error", "message": message}), status_code
+        elif "Network error" in str(e):
+            return jsonify({"error": "Network Error", "message": str(e)}), 500
+        else:
+            return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 
 @dimapi_app.route('/update_old', methods=['PUT','POST'])
@@ -1158,22 +1113,22 @@ def update_dimensional_object_old(): # Renomeado de 'update_old'
     for field in required_fields:
         if field not in data:
             return jsonify({"error": "Invalid input", "message": f"Campo '{field}' é obrigatório."}), 400
-    
+
     object_id_local = data['id']
     sparql_update_url = data['repository_update_url']
     repo_base_uri = data['repository_base_uri']
     if not repo_base_uri.endswith(('#', '/')):
         repo_base_uri += "#"
-    
+
     objeto_uri_sparql = f"<{repo_base_uri}{object_id_local}>"
-    
+
     description_val = data['descricao'].replace('"""', '\\"""')
     abstract_val = data['resumo'].replace('"""', '\\"""') # dc:abstract para resumo
     title_val = data['titulo'].replace('"""', '\\"""')
 
-    sparql_query = f"""{get_prefix()}
+    sparql_update = f"""{get_prefix()}
         DELETE {{
-            {objeto_uri_sparql} dc:description ?oldDescription; 
+            {objeto_uri_sparql} dc:description ?oldDescription;
                                dc:title ?oldTitle;
                                dc:abstract ?oldAbstract.
         }}
@@ -1189,21 +1144,23 @@ def update_dimensional_object_old(): # Renomeado de 'update_old'
             OPTIONAL {{ {objeto_uri_sparql} dc:abstract ?oldAbstract . }}
         }}
     """
-    headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-               'Accept': 'application/sparql-results+json,*/*;q=0.9',
-               'X-Requested-With': 'XMLHttpRequest'}
-    payload = {'update': sparql_query}
-    encoded_data = urlencode(payload)
+    current_app.logger.debug(f"SPARQL Update Dimensional Object (Old) Update: {sparql_update}")
+
     try:
-        response = requests.post(sparql_update_url, headers=headers, data=encoded_data)
-        if response.status_code == 200 or response.status_code == 204:
-            return jsonify({"message": "Objeto atualizado com sucesso", "id": object_id_local}), 200
-        else:
-            return jsonify({"error": "SPARQL Update Error", "message": response.text, "status_code": response.status_code}), response.status_code
-    except requests.exceptions.RequestException as e:
-        return jsonify({"error": "RequestException", "message": str(e)}), 500
+        # Usando execute_sparql_update de utils.py
+        execute_sparql_update(sparql_update_url, sparql_update)
+        return jsonify({"message": "Objeto atualizado com sucesso", "id": object_id_local}), 200
     except Exception as e:
-        return jsonify({"error": "Exception", "message": str(e)}), 500
+        current_app.logger.error(f"Erro ao atualizar objeto dimensional (antigo): {str(e)}")
+        # Captura as exceções levantadas por execute_sparql_update
+        if hasattr(e, 'args') and len(e.args) > 1 and isinstance(e.args[0], str) and "status" in e.args[0]:
+            status_code = int(e.args[0].split("status ")[1].split(" ")[0])
+            message = e.args[1]
+            return jsonify({"error": "SPARQL Update Error", "message": message}), status_code
+        elif "Network error" in str(e):
+            return jsonify({"error": "Network Error", "message": str(e)}), 500
+        else:
+            return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 @dimapi_app.route('/add_relation', methods=['POST'])
 @token_required
@@ -1291,25 +1248,25 @@ def add_relation_dimensional(): # Renomeado de 'add_relation'
         return jsonify({"error": "Invalid input", "message": "Campos 's', 'p', 'o', e 'repository_update_url' são obrigatórios."}), 400
 
     # Assume que s, p, o já estão formatados corretamente para SPARQL (ex: <uri> ou "literal"^^<datatype>)
-    sparql_query = f"""{get_prefix()}
+    sparql_update = f"""{get_prefix()}
         INSERT DATA {{
             {sujeito} {predicado} {objeto_rdf} .
         }}
     """
-    headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-               'Accept': 'application/sparql-results+json,*/*;q=0.9',
-               'X-Requested-With': 'XMLHttpRequest'}
-    payload = {'update': sparql_query}
-    encoded_data = urlencode(payload)
+    current_app.logger.debug(f"SPARQL Add Relation Dimensional Update: {sparql_update}")
 
     try:
-        response = requests.post(sparql_update_url, headers=headers, data=encoded_data)
-        if response.status_code == 200 or response.status_code == 204:
-            return jsonify({"message": "Relação adicionada com sucesso", "triple": f"{sujeito} {predicado} {objeto_rdf} ."}), 201
-        else:
-            return jsonify({"error": "SPARQL Update Error", "message": response.text, "status_code": response.status_code}), response.status_code
-    except requests.exceptions.RequestException as e:
-        return jsonify({"error": "RequestException", "message": str(e)}), 500
+        # Usando execute_sparql_update de utils.py
+        execute_sparql_update(sparql_update_url, sparql_update)
+        return jsonify({"message": "Relação adicionada com sucesso", "triple": f"{sujeito} {predicado} {objeto_rdf} ."}), 201
     except Exception as e:
-        return jsonify({"error": "Exception", "message": str(e)}), 500
-
+        current_app.logger.error(f"Erro ao adicionar relação dimensional: {str(e)}")
+        # Captura as exceções levantadas por execute_sparql_update
+        if hasattr(e, 'args') and len(e.args) > 1 and isinstance(e.args[0], str) and "status" in e.args[0]:
+            status_code = int(e.args[0].split("status ")[1].split(" ")[0])
+            message = e.args[1]
+            return jsonify({"error": "SPARQL Update Error", "message": message}), status_code
+        elif "Network error" in str(e):
+            return jsonify({"error": "Network Error", "message": str(e)}), 500
+        else:
+            return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
