@@ -1,6 +1,6 @@
 from functools import wraps
 from flask import request, jsonify, g, current_app
-from datetime import datetime
+from datetime import datetime, timezone
 # Importar a função execute_sparql_query do módulo utils
 from utils import execute_sparql_query
 # Importar o carregador de configuração
@@ -20,13 +20,12 @@ def token_required(f):
         token = token.replace('Bearer ', '')
         query = f"""
         PREFIX : <http://guara.ueg.br/ontologias/usuarios#>
-        SELECT ?user ?validade  (GROUP_CONCAT(?permissao; separator=", ") AS ?permissoes)
+        SELECT ?user ?validade ?permissao
             WHERE {{
                 ?user :token "{token}" ;
                   :validade ?validade ;
                   :temPermissao ?permissao .
-
-        }}GROUP BY ?user ?validade
+        }}
         """
         current_app.logger.debug(f"Buscando token: {query}") # Adicionado log
         try:
@@ -35,12 +34,16 @@ def token_required(f):
             bindings = results.get('results', {}).get('bindings', [])
 
             if not bindings:
-                return jsonify({'message': 'Token inválido'}), 403
+                return jsonify({'message': 'Token inválido'}), 401
 
+            # Verificar validade do token
             validade_str = bindings[0]['validade']['value']
+            # Tratar diferentes formatos de data
+            if validade_str.endswith('Z'):
+                validade_str = validade_str.replace('Z', '+00:00')
             validade_dt = datetime.fromisoformat(validade_str)
 
-            if datetime.now() > validade_dt:
+            if datetime.now(timezone.utc) > validade_dt:
                 return jsonify({'message': 'Token expirado'}), 403
 
             g.user_uri = bindings[0]['user']['value']

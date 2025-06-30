@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify, current_app
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 # Importar as funções refatoradas de utils.py
 from utils import execute_sparql_query, execute_sparql_update
 # Importar o carregador de configuração e obter as URLs
@@ -128,7 +128,7 @@ def login():
     PREFIX : <http://guara.ueg.br/ontologias/usuarios#>
     SELECT ?s ?permissao ?username ?repositorio_uri WHERE {{
         ?s foaf:mbox "{email}" ;
-           :password "{password}" ;
+           foaf:password "{password}" ;
            :temPermissao ?permissao ;
            :repo ?repositorio_uri ; # Busca todos os repositórios associados
            :username ?username .
@@ -157,12 +157,12 @@ def login():
 
 
         token = str(uuid.uuid4())
-        validade = datetime.now() + timedelta(hours=24) # Token válido por 24 horas
+        validade = datetime.now(timezone.utc) + timedelta(hours=24)
 
         update_query = f"""
         PREFIX : <http://guara.ueg.br/ontologias/usuarios#>
         DELETE {{ <{user_uri}> :token ?old_token ; :validade ?old_validade . }}
-        INSERT {{ <{user_uri}> :token "{token}" ; :validade "{validade.isoformat()}Z" . }}
+        INSERT {{ <{user_uri}> :token "{token}" ; :validade "{validade.isoformat()}" . }}
         WHERE {{
             OPTIONAL {{ <{user_uri}> :token ?old_token . }}
             OPTIONAL {{ <{user_uri}> :validade ?old_validade . }}
@@ -178,7 +178,7 @@ def login():
             'permissao': user_permission,
             'token': token,
             'repositorios_associados_nomes': list(set(repositorios_associados_nomes)), # Retorna nomes únicos
-            'validade': validade.isoformat() + "Z",
+            'validade': validade.isoformat(),
         }), 200
     except Exception as e:
         current_app.logger.error(f"Erro no login: {str(e)}")

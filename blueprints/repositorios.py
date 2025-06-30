@@ -1,6 +1,7 @@
+import requests
 from flask import Blueprint, request, jsonify, current_app, g # Importado 'g' para acessar user_uri
 # Importar as funções refatoradas de utils.py
-from utils import execute_sparql_query, execute_sparql_update
+from utils import execute_sparql_query, execute_sparql_update, sparql_endpoint_works
 from consultas import get_sparq_repo
 from config_loader import load_config
 from urllib.parse import urlencode # Ainda necessário para form_payload em criar_dataset_fuseki
@@ -56,6 +57,15 @@ def obter_repositorio_por_nome(name):
     except Exception as e:
         current_app.logger.error(f"Erro ao obter repositório por nome: {str(e)}")
     return None
+
+def dataset_exists(fuseki_url, dataset_name):
+    endpoint = f"{fuseki_url}/{dataset_name}/query"
+    try:
+        response = requests.get(endpoint)
+        return response.status_code != 404
+    except Exception:
+        return False
+
 
 @repo_app.route('/listar_repositorios', methods=['GET'])
 def listar_repositorios_endpoint():
@@ -155,6 +165,18 @@ def listar_repositorios_endpoint():
         current_app.logger.debug(f"SPARQL query para listar repositórios: {sparql_query}")
 
         result = execute_sparql_query(REPO_QUERY_URL, sparql_query)
+
+        # NOVO: filtrar apenas os que existem no Fuseki
+        fuseki_url = FUSEKI_URL.rstrip('/')
+        valid_bindings = []
+        for repo in result.get('results', {}).get('bindings', []):
+            uri = repo.get('uri', {}).get('value', '')
+            dataset_name = uri.rstrip('/').split('/')[-1]
+            endpoint_url = f"{FUSEKI_URL.rstrip('/')}/{dataset_name}/query"
+            if sparql_endpoint_works(endpoint_url):
+                valid_bindings.append(repo)
+        result['results']['bindings'] = valid_bindings
+
         return jsonify(result)
 
     except Exception as e:

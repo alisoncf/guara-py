@@ -1,0 +1,889 @@
+------------------- classdef.owl
+@prefix :      <http://guara.ueg.br/ontologias/v1/classdef#> .
+@prefix rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix owl:   <http://www.w3.org/2002/07/owl#> .
+@prefix xsd:   <http://www.w3.org/2001/XMLSchema#> .
+@prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
+
+# Ontologia que define a estrutura mínima para espaços de memória
+<http://guara.ueg.br/ontologias/v1/classdef>
+        a       owl:Ontology .
+
+# Classe genérica para representar a organização dos espaços de memória
+:Acervo  a      rdfs:Class ;
+        rdfs:label "Acervo" ;
+        rdfs:comment "Classe genérica que agrupa todos os objetos de acervo em um espaço de memória (museu, arquivo, biblioteca, etc.)." .
+
+# Propriedade obrigatória para qualquer classe que representa um objeto de acervo
+:colecao  a       owl:ObjectProperty ;
+          rdfs:domain :Acervo ;  
+          rdfs:range :Acervo ;  
+          rdfs:label "Coleção" ;
+          rdfs:comment "Propriedade para associar um objeto de acervo a uma coleção dentro do espaço de memória." .
+
+# Propriedade obrigatória para a relação entre a classe e sua superclasse
+:pertenceA  a       owl:ObjectProperty ;
+                  rdfs:domain :Acervo ;
+                  rdfs:range :Acervo ;
+                  rdfs:label "Subclasse de" ;
+                  rdfs:comment "Relaciona uma classe ao seu nível superior dentro da hierarquia do acervo." .
+
+# Exemplo de uma classe de objetos específicos do acervo
+:Documento  a      rdfs:Class ;
+        rdfs:label "Documento" ;
+        rdfs:comment "Classe para representar documentos dentro de um acervo." ;
+        rdfs:subClassOf  :Acervo .  # Documento é uma subclasse de Acervo
+
+:Livro  a      rdfs:Class ;
+        rdfs:label "Livro" ;
+        rdfs:comment "Classe para representar livros dentro de um acervo." ;
+        rdfs:subClassOf  :Acervo .  # Livro é uma subclasse de Acervo
+
+:Mapa  a      rdfs:Class ;
+        rdfs:label "Mapa" ;
+        rdfs:comment "Classe para representar mapas dentro de um acervo." ;
+        rdfs:subClassOf  :Acervo .  # Mapa é uma subclasse de Acervo
+		
+		
+
+------------------- guara.owl
+PREFIX :         <http://guara.ueg.br/ontologias/v1/objetos#>
+PREFIX classdef: <http://guara.ueg.br/ontologias/v1/classdef#>
+PREFIX dc:       <http://purl.org/dc/elements/1.1>
+PREFIX foaf:     <http://xmlns.com/foaf/0.1/>
+PREFIX owl:      <http://www.w3.org/2002/07/owl#>
+PREFIX rdf:      <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs:     <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX schema:   <http://schema.org/>
+PREFIX xml:      <http://www.w3.org/XML/1998/namespace>
+PREFIX xsd:      <http://www.w3.org/2001/XMLSchema#>
+
+<http://guara.ueg.br/ontologias/v1/objetos>
+        rdf:type      owl:Ontology;
+        rdfs:comment  "Esta ontologia descreve objetos digitais e suas propriedades."@pt , "This ontology describes digital objects and their properties."@en;
+        rdfs:label    "Ontologia de Objetos Digitais" .
+
+:alcunha  rdf:type          owl:AnnotationProperty , owl:DatatypeProperty;
+        rdfs:comment        "alcunha ou apelido de alguém ou alguma coisa.";
+        rdfs:domain         :ObjetoDigital;
+        rdfs:range          xsd:string;
+        rdfs:subPropertyOf  owl:topDataProperty .
+
+:ObjetoDigital  rdf:type  owl:Class;
+        rdfs:comment     "Class representing a digital object."@en , "Classe que representa um objeto digital."@pt;
+        rdfs:label       "Digital Object" , "Objeto Digital";
+        rdfs:subClassOf  owl:Thing .
+
+:coordenadas  rdf:type  owl:AnnotationProperty, owl:DatatypeProperty .
+
+:dataEvento  rdf:type  owl:AnnotationProperty , owl:DatatypeProperty;
+        rdfs:domain  :Evento;
+        rdfs:range   xsd:string .
+
+:Evento  rdf:type        owl:Class , :ObjetoDimensional , owl:NamedIndividual;
+        rdfs:comment     "Class representing an event, such as a historical event."@en , "Classe que representa um evento, como um evento histórico."@pt;
+        rdfs:label       "Event" , "Evento";
+        rdfs:subClassOf  :ObjetoDimensional .
+
+:dataMorte  rdf:type        owl:AnnotationProperty , owl:DatatypeProperty;
+        rdfs:domain         :Pessoa;
+        rdfs:range          xsd:string;
+        rdfs:subPropertyOf  owl:topDataProperty .
+
+:Pessoa  rdf:type        owl:Class , :ObjetoDimensional , owl:NamedIndividual;
+        rdfs:comment     "Class representing a person."@en , "Classe que representa uma pessoa."@pt;
+        rdfs:label       "Person" , "Pessoa";
+        rdfs:subClassOf  :ObjetoDimensional .
+
+:dataNascimento  rdf:type   owl:AnnotationProperty , owl:DatatypeProperty;
+        rdfs:domain         :Pessoa;
+        rdfs:range          xsd:string;
+        rdfs:subPropertyOf  owl:topDataProperty .
+
+:localDeOrigem  rdf:type  owl:AnnotationProperty , owl:DatatypeProperty .
+
+:localEvento  rdf:type  owl:AnnotationProperty , owl:DatatypeProperty .
+
+dc:description  rdf:type  owl:AnnotationProperty , owl:DatatypeProperty .
+
+dc:title  rdf:type  owl:AnnotationProperty , owl:DatatypeProperty .
+
+xsd:date  rdf:type  owl:DatatypeProperty , rdfs:Datatype .
+
+xsd:duration  rdf:type  owl:DatatypeProperty , rdfs:Datatype .
+
+:colecao  rdf:type    owl:ObjectProperty;
+        rdfs:comment  "Relaciona um Objeto Físico a uma coleção dentro do Acervo."@pt , "Relates a Physical Object to a collection within the Archive."@en;
+        rdfs:domain   :ObjetoFisico;
+        rdfs:label    "coleção";
+        rdfs:range    classdef:Acervo;
+		rdfs:subClassOf rdf:type .
+
+:ObjetoFisico  rdf:type  owl:Class;
+        rdfs:comment     "Class representing a physical object."@en , "Classe que representa um objeto físico."@pt;
+        rdfs:label       "Objeto Físico" , "Physical Object";
+        rdfs:subClassOf  :ObjetoDigital .
+
+:onde   rdf:type     owl:ObjectProperty;
+        rdfs:domain  :ObjetoDigital;
+        rdfs:range   :Lugar .
+
+:Lugar  rdf:type         owl:Class , :ObjetoDimensional , owl:NamedIndividual;
+        rdfs:comment     "Class representing a place."@en , "Classe que representa um lugar."@pt;
+        rdfs:label       "Lugar" , "Place";
+        rdfs:subClassOf  :ObjetoDimensional .
+
+:ObjetoDimensional  rdf:type  owl:Class;
+        rdfs:comment     "Class representing a dimensional object, such as person, event, time, or place."@en , "Classe que representa um objeto dimensional, como pessoa, evento, tempo ou lugar."@pt;
+        rdfs:label       "Dimensional Object" , "Objeto Dimensional";
+        rdfs:subClassOf  :ObjetoDigital .
+
+:oque   rdf:type     owl:ObjectProperty;
+        rdfs:domain  :ObjetoDigital;
+        rdfs:range   :Evento .
+
+:quando  rdf:type    owl:ObjectProperty;
+        rdfs:domain  :ObjetoDigital;
+        rdfs:range   :Tempo .
+
+:Tempo  rdf:type         owl:Class , :ObjetoDimensional , owl:NamedIndividual;
+        rdfs:comment     "Class representing time."@en , "Classe que representa o tempo."@pt;
+        rdfs:label       "Tempo" , "Time";
+        rdfs:subClassOf  :ObjetoDimensional .
+
+:quem   rdf:type     owl:ObjectProperty;
+        rdfs:domain  :ObjetoDigital;
+        rdfs:range   :Pessoa .
+
+:temRelacao  rdf:type       owl:ObjectProperty;
+        rdfs:comment        "Relata uma relação entre o objeto e outro recurso, como uma mídia associada.";
+        rdfs:domain         owl:Thing;
+        rdfs:range          owl:Thing;
+        rdfs:subPropertyOf  dc:relation .
+
+:tipoFisico  rdf:type  owl:ObjectProperty;
+        rdfs:comment  "Property that associates physical objects to a specific physical object type."@en , "Propriedade que associa objetos físicos a um tipo específico de objeto físico."@pt;
+        rdfs:domain   :ObjetoFisico;
+        rdfs:label    "Physical relation" , "é um Tipo Físico";
+        rdfs:range    :TipoFisico ;
+		rdfs:subClassOf rdf:type .
+
+:dimensao  rdf:type  owl:ObjectProperty;
+        rdfs:comment  "Property that associates physical objects to a specific dimensional object type."@en , "Propriedade que associa objetos dimensional a um tipo específico de objeto físico."@pt;
+        rdfs:domain   :ObjetoDimensional;
+        rdfs:label    "Is a Dimensional" , "É um tipo dimensional";
+        rdfs:range    :TipoDimensional ;
+		rdfs:subClassOf rdf:type .
+
+:TipoFisico  rdf:type  owl:Class;
+        rdfs:comment  "Class representing a physical object type."@en , "Classe que representa um tipo de objeto físico."@pt;
+        rdfs:label    "Tipo Físico" , "Physical Object Type" .
+		
+:altura  rdf:type     owl:DatatypeProperty;
+        rdfs:comment  "Altura do objeto."@pt , "Height of the object."@en;
+        rdfs:domain   :ObjetoDigital;
+        rdfs:label    "altura";
+        rdfs:range    xsd:float .
+
+:criacao  rdf:type  owl:DatatypeProperty;
+        rdfs:comment  "Creation date of the object."@en , "Data de criação do objeto."@pt;
+        rdfs:domain   :ObjetoDigital;
+        rdfs:label    "data de criação e quem modificou";
+        rdfs:range    xsd:string .
+
+:modificacao  rdf:type  owl:DatatypeProperty;
+        rdfs:comment  "Datae e usuário de modificação do objeto."@pt , "Modification date e user of the object."@en;
+        rdfs:domain   :ObjetoDigital;
+        rdfs:label    "data de modificação e quem modificou";
+        rdfs:range    xsd:string .
+
+:duracao  rdf:type    owl:DatatypeProperty;
+        rdfs:comment  "Duration of an event or activity related to the object."@en , "Duração de um evento ou atividade relacionada ao objeto."@pt;
+        rdfs:domain   :ObjetoDigital;
+        rdfs:label    "duração";
+        rdfs:range    xsd:duration .
+
+:id     rdf:type      owl:DatatypeProperty;
+        rdfs:comment  "Identificador único do recurso."@pt , "Unique identifier of the resource."@en;
+        rdfs:label    "identificador" .
+
+:latitude  rdf:type         owl:DatatypeProperty;
+        rdfs:domain         :Lugar;
+        rdfs:range          xsd:double;
+        rdfs:subPropertyOf  owl:topDataProperty .
+
+:longitude  rdf:type        owl:DatatypeProperty;
+        rdfs:domain         :Lugar;
+        rdfs:range          xsd:double;
+        rdfs:subPropertyOf  owl:topDataProperty .
+
+:transcricao  rdf:type  owl:DatatypeProperty;
+        rdfs:domain  :ObjetoFisico;
+        rdfs:range   xsd:string .
+
+schema:contentUrl  rdf:type  owl:DatatypeProperty;
+        rdfs:domain  :ObjetoDigital;
+        rdfs:range   xsd:anyURI .
+
+schema:associatedMedia
+        rdf:type      owl:ObjectProperty;
+        rdfs:comment  "Arquivo de mídia associado ao objeto digital."@pt;
+        rdfs:domain   :ObjetoDigital;
+        rdfs:range    schema:MediaObject .
+
+:titulo  rdf:type           owl:DatatypeProperty;
+        rdfs:comment        "O título do recurso."@pt , "The resource title."@en;
+        rdfs:domain         :ObjetoDigital;
+        rdfs:label          "Título"@pt , "Title"@en;
+        rdfs:range          rdfs:Literal;
+        rdfs:subPropertyOf  dc:title .
+
+:resumo  rdf:type           owl:DatatypeProperty;
+        rdfs:comment        "O resumo do recurso."@pt;
+        rdfs:domain         :ObjetoDigital;
+        rdfs:label          "Resumo"@pt;
+        rdfs:range          rdfs:Literal;
+        rdfs:subPropertyOf  dc:abstract .
+
+:descricao  rdf:type        owl:DatatypeProperty;
+        rdfs:comment        "Um texto descritivo e detalhado do recurso."@pt;
+        rdfs:domain         :ObjetoDigital;
+        rdfs:label          "Descrição"@pt;
+        rdfs:range          rdfs:Literal;
+        rdfs:subPropertyOf  dc:abstract .
+
+:assunto  rdf:type          owl:DatatypeProperty;
+        rdfs:comment        "O assunto relacionado ao recurso."@pt;
+        rdfs:domain         :ObjetoDigital;
+        rdfs:label          "Assunto"@pt;
+        rdfs:range          rdfs:Literal;
+        rdfs:subPropertyOf  dc:subject .
+
+:Arqueologico  rdf:type  :ObjetoFisico , owl:Class , owl:NamedIndividual;
+        rdfs:comment     "Class representing an archaeological document."@en , "Classe que representa um documento arqueológico."@pt;
+        rdfs:label       "Archaeological Document" , "Arqueológico" , "Documento Arqueológico";
+        rdfs:subClassOf  :TipoFisico .
+
+:ArquivisticoDocumental
+        rdf:type         owl:Class;
+        rdfs:label       "Arquivístico-Documental";
+        rdfs:subClassOf  :TipoFisico .
+
+:ImageticoSonoro  rdf:type  owl:Class;
+        rdfs:label       "Imagetico-Sonoro";
+        rdfs:subClassOf  :TipoFisico .
+
+:Museologico  rdf:type   owl:Class;
+        rdfs:label       "Museológico";
+        rdfs:subClassOf  :TipoFisico .
+
+:Albert_Einstein  rdf:type  :Pessoa , owl:NamedIndividual;
+        :alcunha         "Einstein";
+        :dataMorte       "1955-04-18"^^xsd:date;
+        :dataNascimento  "1879-03-14"^^xsd:date;
+        :id              "pessoa1";
+        dc:description   "Físico teórico alemão, autor da teoria da relatividade.";
+        dc:title         "Albert Einstein" .
+
+:Arquivistico-Documental
+        rdf:type      :ObjetoFisico , owl:NamedIndividual;
+        rdfs:comment  "Class representing an archival-documental document."@en , "Classe que representa um documento arquivístico-documental."@pt;
+        rdfs:label    "Archival-Documental Document" , "Documento Arquivístico-Documental" .
+
+:Bibliotecario  rdf:type  :ObjetoFisico , owl:NamedIndividual;
+        rdfs:comment  "Class representing a library document."@en , "Classe que representa um documento bibliotecário."@pt;
+        rdfs:label    "Documento Bibliotecário" , "Library Document" .
+
+:Documento_Historico1
+        rdf:type        :ObjetoDigital , owl:NamedIndividual;
+        :id             "documento1";
+        dc:description  "Um documento histórico importante.";
+        dc:title        "Documento Histórico 1" .
+
+:Independencia_Brasil
+        rdf:type        :Evento , owl:NamedIndividual;
+        :dataEvento     "1822-09-07"^^xsd:date;
+        :duracao        "P1096Y"^^xsd:duration;
+        :id             "evento1";
+        :localEvento    :Palacio_Rio_Branco;
+        dc:description  "Evento histórico que marcou a independência do Brasil de Portugal.";
+        dc:title        "Independência do Brasil" .
+
+:Palacio_Rio_Branco  rdf:type  :Lugar , owl:NamedIndividual;
+        :coordenadas    "-12.9712° N, -38.5016° W";
+        :id             "lugar1";
+        :localDeOrigem  "Salvador, Bahia, Brasil";
+        dc:description  "Palácio histórico em Salvador, Bahia, Brasil.";
+        dc:title        "Palácio Rio Branco" .
+
+:MuseuLogico  rdf:type  :ObjetoFisico , owl:NamedIndividual;
+        rdfs:comment  "Class representing a museum document."@en , "Classe que representa um documento museológico."@pt;
+        rdfs:label    "Documento Museológico" , "Museum Document" .
+
+:Seculo_XX  rdf:type      owl:NamedIndividual , :Tempo;
+        :dataCriacao      "1901-01-01"^^xsd:date;
+        :dataModificacao  "2000-12-31"^^xsd:date;
+        :id               "tempo1";
+        dc:description    "Período histórico que abrange o século XX.";
+        dc:title          "Século XX" .
+
+
+------------------- objetos.owl
+@prefix : <http://guara.ueg.br/ontologias/v1/objetos#> .
+@prefix classdef: <http://guara.ueg.br/ontologias/v1/classdef#> .
+@prefix dc: <http://purl.org/dc/terms/> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix xml: <http://www.w3.org/XML/1998/namespace> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix schema: <http://schema.org/> .
+@base <http://guara.ueg.br/ontologias/v1/objetos#> .
+
+<http://guara.ueg.br/ontologias/v1/objetos> rdf:type owl:Ontology ;
+                                             rdfs:comment "Esta ontologia descreve objetos digitais e suas propriedades."@pt ,
+                                                          "This ontology describes digital objects and their properties."@en ;
+                                             rdfs:label "Ontologia de Objetos Digitais" .
+
+#################################################################
+#    Annotation properties
+#################################################################
+
+###  http://guara.ueg.br/ontologias/v1/objetos#alcunha
+:alcunha rdf:type owl:AnnotationProperty .
+
+
+###  http://guara.ueg.br/ontologias/v1/objetos#coordenadas
+:coordenadas rdf:type owl:DatatypeProperty ;
+         rdfs:subPropertyOf owl:topDataProperty ;
+         rdfs:domain :ObjetoDigital ;
+         rdfs:range xsd:string .
+
+
+###  http://guara.ueg.br/ontologias/v1/objetos#dataEvento
+:dataEvento rdf:type owl:AnnotationProperty ;
+            rdfs:range xsd:string .
+
+
+###  http://guara.ueg.br/ontologias/v1/objetos#dataMorte
+:dataMorte rdf:type owl:AnnotationProperty ;
+           rdfs:range xsd:string .
+
+
+###  http://guara.ueg.br/ontologias/v1/objetos#dataNascimento
+:dataNascimento rdf:type owl:AnnotationProperty ;
+                rdfs:range xsd:string .
+
+
+###  http://guara.ueg.br/ontologias/v1/objetos#localDeOrigem
+:localDeOrigem rdf:type owl:AnnotationProperty .
+
+
+###  http://guara.ueg.br/ontologias/v1/objetos#localEvento
+:localEvento rdf:type owl:AnnotationProperty .
+
+
+###  http://purl.org/dc/terms/description
+dc:description rdf:type owl:AnnotationProperty .
+
+
+###  http://purl.org/dc/terms/title
+dc:title rdf:type owl:AnnotationProperty .
+
+
+#################################################################
+#    Datatypes
+#################################################################
+
+###  http://www.w3.org/2001/XMLSchema#date
+xsd:date rdf:type rdfs:Datatype .
+
+
+###  http://www.w3.org/2001/XMLSchema#duration
+xsd:duration rdf:type rdfs:Datatype .
+
+
+#################################################################
+#    Object Properties
+#################################################################
+
+###  http://guara.ueg.br/ontologias/v1/objetos#colecao
+:colecao rdf:type owl:ObjectProperty ;
+         rdfs:domain :ObjetoFisico ;
+         rdfs:range classdef:Acervo ;
+         rdfs:comment "Relaciona um Objeto Físico a uma coleção dentro do Acervo."@pt ,
+                      "Relates a Physical Object to a collection within the Archive."@en ;
+         rdfs:label "coleção" .
+
+###  http://guara.ueg.br/ontologias/v1/objetos#onde
+:onde rdf:type owl:ObjectProperty ;
+      rdfs:domain :ObjetoDigital ;
+      rdfs:range :Lugar .
+
+
+###  http://guara.ueg.br/ontologias/v1/objetos#oque
+:oque rdf:type owl:ObjectProperty ;
+      rdfs:domain :ObjetoDigital ;
+      rdfs:range :Evento .
+
+
+###  http://guara.ueg.br/ontologias/v1/objetos#quando
+:quando rdf:type owl:ObjectProperty ;
+        rdfs:domain :ObjetoDigital ;
+        rdfs:range :Tempo .
+
+
+###  http://guara.ueg.br/ontologias/v1/objetos#quem
+:quem rdf:type owl:ObjectProperty ;
+      rdfs:domain :ObjetoDigital ;
+      rdfs:range :Pessoa .
+
+
+:temRelacao a owl:ObjectProperty ;
+    rdfs:subPropertyOf dc:relation ;
+    rdfs:domain owl:Thing ;
+    rdfs:range owl:Thing ;
+    rdfs:comment "Relata uma relação entre o objeto e outro recurso, como uma mídia associada." .
+
+
+###  http://guara.ueg.br/ontologias/v1/objetos#tipoFisico
+:tipoFisico rdf:type owl:ObjectProperty ;
+            rdfs:domain :ObjetoFisico ;
+            rdfs:range :TipoFisico ;
+            rdfs:comment "Property that associates physical objects to a specific physical object type."@en ,
+                         "Propriedade que associa objetos físicos a um tipo específico de objeto físico."@pt ;
+            rdfs:label "Physical Type" ,
+                       "Tipo Físico" .
+
+
+#################################################################
+#    Data properties
+#################################################################
+
+###  http://guara.ueg.br/ontologias/v1/objetos#alcunha
+:alcunha rdf:type owl:DatatypeProperty ;
+         rdfs:subPropertyOf owl:topDataProperty ;
+         rdfs:domain :ObjetoDigital ;
+         rdfs:range xsd:string .
+
+
+###  http://guara.ueg.br/ontologias/v1/objetos#altura
+:altura rdf:type owl:DatatypeProperty ;
+        rdfs:domain :ObjetoDigital ;
+        rdfs:range xsd:float ;
+        rdfs:comment "Altura do objeto."@pt ,
+                     "Height of the object."@en ;
+        rdfs:label "altura" .
+
+
+###  http://guara.ueg.br/ontologias/v1/objetos#dataCriacao
+:dataCriacao rdf:type owl:DatatypeProperty ;
+             rdfs:domain :ObjetoDigital ;
+             rdfs:range xsd:string ;
+             rdfs:comment "Creation date of the object."@en ,
+                          "Data de criação do objeto."@pt ;
+             rdfs:label "data de criação" .
+
+
+###  http://guara.ueg.br/ontologias/v1/objetos#dataEvento
+:dataEvento rdf:type owl:DatatypeProperty ;
+            rdfs:domain :Evento .
+
+
+###  http://guara.ueg.br/ontologias/v1/objetos#dataModificacao
+:dataModificacao rdf:type owl:DatatypeProperty ;
+                 rdfs:domain :ObjetoDigital ;
+                 rdfs:range xsd:dateTime ;
+                 rdfs:comment "Data de modificação do objeto."@pt ,
+                              "Modification date of the object."@en ;
+                 rdfs:label "data de modificação" .
+
+
+###  http://guara.ueg.br/ontologias/v1/objetos#dataMorte
+:dataMorte rdf:type owl:DatatypeProperty ;
+           rdfs:subPropertyOf owl:topDataProperty ;
+           rdfs:domain :Pessoa .
+
+
+###  http://guara.ueg.br/ontologias/v1/objetos#dataNascimento
+:dataNascimento rdf:type owl:DatatypeProperty ;
+                rdfs:subPropertyOf owl:topDataProperty ;
+                rdfs:domain :Pessoa .
+
+
+###  http://guara.ueg.br/ontologias/v1/objetos#duracao
+:duracao rdf:type owl:DatatypeProperty ;
+         rdfs:domain :ObjetoDigital ;
+         rdfs:range xsd:duration ;
+         rdfs:comment "Duration of an event or activity related to the object."@en ,
+                      "Duração de um evento ou atividade relacionada ao objeto."@pt ;
+         rdfs:label "duração" .
+
+
+###  http://guara.ueg.br/ontologias/v1/objetos#id
+:id rdf:type owl:DatatypeProperty ;
+    rdfs:comment "Identificador único do recurso."@pt ,
+                 "Unique identifier of the resource."@en ;
+    rdfs:label "identificador" .
+
+
+###  http://guara.ueg.br/ontologias/v1/objetos#latitude
+:latitude rdf:type owl:DatatypeProperty ;
+          rdfs:subPropertyOf owl:topDataProperty ;
+          rdfs:domain :Lugar ;
+          rdfs:range xsd:double .
+
+
+###  http://guara.ueg.br/ontologias/v1/objetos#longitude
+:longitude rdf:type owl:DatatypeProperty ;
+           rdfs:subPropertyOf owl:topDataProperty ;
+           rdfs:domain :Lugar ;
+           rdfs:range xsd:double .
+
+
+###  http://guara.ueg.br/ontologias/v1/objetos#transcricao
+:transcricao rdf:type owl:DatatypeProperty ;
+             rdfs:domain :ObjetoFisico ;
+             rdfs:range xsd:string .
+
+
+
+###  http://schema.org/contentUrl
+schema:contentUrl rdf:type owl:DatatypeProperty ;
+                  rdfs:domain :ObjetoDigital ;
+                  rdfs:range xsd:anyURI .
+
+schema:associatedMedia rdf:type owl:ObjectProperty ;
+                       rdfs:domain :ObjetoDigital ;
+                       rdfs:range schema:MediaObject ;
+                       rdfs:comment "Arquivo de mídia associado ao objeto digital."@pt .
+
+:titulo a owl:DatatypeProperty ;
+    rdfs:subPropertyOf dc:title ;
+    rdfs:domain :ObjetoDigital ;
+    rdfs:range rdfs:Literal ;
+    rdfs:label "Título"@pt ;
+    rdfs:comment "O título do recurso."@pt ;
+    rdfs:label "Title"@en ;
+    rdfs:comment "The resource title."@en .
+
+:resumo a owl:DatatypeProperty ;
+    rdfs:subPropertyOf dc:abstract ;
+    rdfs:domain :ObjetoDigital ;
+    rdfs:range rdfs:Literal ;
+    rdfs:label "Resumo"@pt ;
+    rdfs:comment "O resumo do recurso."@pt .
+
+:descricao a owl:DatatypeProperty ;
+    rdfs:subPropertyOf dc:description ;
+    rdfs:domain :ObjetoDigital ;
+    rdfs:range rdfs:Literal ;
+    rdfs:label "Descrição"@pt ;
+    rdfs:comment "Um texto descritivo e detalhado do recurso."@pt .
+
+:assunto a owl:DatatypeProperty ;
+    rdfs:subPropertyOf dc:subject ;
+    rdfs:domain :ObjetoDigital ;
+    rdfs:range rdfs:Literal ;
+    rdfs:label "Assunto"@pt ;
+    rdfs:comment "O assunto relacionado ao recurso."@pt .
+
+
+
+
+#################################################################
+#    Classes
+#################################################################
+
+###  http://guara.ueg.br/ontologias/v1/objetos#Arqueologico
+:Arqueologico rdf:type owl:Class ;
+              rdfs:subClassOf :TipoFisico .
+
+
+###  http://guara.ueg.br/ontologias/v1/objetos#ArquivisticoDocumental
+:ArquivisticoDocumental rdf:type owl:Class ;
+                        rdfs:subClassOf :TipoFisico ;
+                        rdfs:label "Arquivístico-Documental" .
+
+
+###  http://guara.ueg.br/ontologias/v1/objetos#Evento
+:Evento rdf:type owl:Class ;
+        rdfs:subClassOf :ObjetoDimensional .
+
+
+###  http://guara.ueg.br/ontologias/v1/objetos#ImageticoSonoro
+:ImageticoSonoro rdf:type owl:Class ;
+                 rdfs:subClassOf :TipoFisico ;
+                 rdfs:label "Imagetico-Sonoro" .
+
+
+###  http://guara.ueg.br/ontologias/v1/objetos#Lugar
+:Lugar rdf:type owl:Class ;
+       rdfs:subClassOf :ObjetoDimensional .
+
+
+###  http://guara.ueg.br/ontologias/v1/objetos#Museologico
+:Museologico rdf:type owl:Class ;
+             rdfs:subClassOf :TipoFisico ;
+             rdfs:label "Museológico" .
+
+
+###  http://guara.ueg.br/ontologias/v1/objetos#ObjetoDigital
+:ObjetoDigital rdf:type owl:Class ;
+               rdfs:subClassOf owl:Thing ;
+               rdfs:comment "Class representing a digital object."@en ,
+                            "Classe que representa um objeto digital."@pt ;
+               rdfs:label "Digital Object" ,
+                          "Objeto Digital" .
+
+
+###  http://guara.ueg.br/ontologias/v1/objetos#ObjetoDimensional
+:ObjetoDimensional rdf:type owl:Class ;
+                   rdfs:subClassOf :ObjetoDigital ;
+                   rdfs:comment "Class representing a dimensional object, such as person, event, time, or place."@en ,
+                                "Classe que representa um objeto dimensional, como pessoa, evento, tempo ou lugar."@pt ;
+                   rdfs:label "Dimensional Object" ,
+                              "Objeto Dimensional" .
+
+
+###  http://guara.ueg.br/ontologias/v1/objetos#ObjetoFisico
+:ObjetoFisico rdf:type owl:Class ;
+              rdfs:subClassOf :ObjetoDigital ;
+              rdfs:comment "Class representing a physical object."@en ,
+                           "Classe que representa um objeto físico."@pt ;
+              rdfs:label "Objeto Físico" ,
+                         "Physical Object" .
+
+
+###  http://guara.ueg.br/ontologias/v1/objetos#Pessoa
+:Pessoa rdf:type owl:Class ;
+        rdfs:subClassOf :ObjetoDimensional .
+
+
+###  http://guara.ueg.br/ontologias/v1/objetos#Tempo
+:Tempo rdf:type owl:Class ;
+       rdfs:subClassOf :ObjetoDimensional .
+
+
+###  http://guara.ueg.br/ontologias/v1/objetos#TipoFisico
+:TipoFisico rdf:type owl:Class ;
+            rdfs:comment "Class representing a physical object type."@en ,
+                         "Classe que representa um tipo de objeto físico."@pt ;
+            rdfs:label "Physical Object Type" ,
+                       "Tipo Físico" .
+
+
+#################################################################
+#    Individuals
+#################################################################
+
+###  http://guara.ueg.br/ontologias/v1/objetos#Albert_Einstein
+:Albert_Einstein rdf:type owl:NamedIndividual ,
+                          :Pessoa ;
+                 :id "pessoa1" ;
+                 :alcunha "Einstein" ;
+                 :dataMorte "1955-04-18"^^xsd:date ;
+                 :dataNascimento "1879-03-14"^^xsd:date ;
+                 dc:description "Físico teórico alemão, autor da teoria da relatividade." ;
+                 dc:title "Albert Einstein" .
+
+
+###  http://guara.ueg.br/ontologias/v1/objetos#Arqueologico
+:Arqueologico rdf:type owl:NamedIndividual ,
+                       :ObjetoFisico .
+
+
+###  http://guara.ueg.br/ontologias/v1/objetos#Arquivistico-Documental
+:Arquivistico-Documental rdf:type owl:NamedIndividual ,
+                                  :ObjetoFisico ;
+                         rdfs:comment "Class representing an archival-documental document."@en ,
+                                      "Classe que representa um documento arquivístico-documental."@pt ;
+                         rdfs:label "Archival-Documental Document" ,
+                                    "Documento Arquivístico-Documental" .
+
+
+###  http://guara.ueg.br/ontologias/v1/objetos#Bibliotecario
+:Bibliotecario rdf:type owl:NamedIndividual ,
+                        :ObjetoFisico ;
+               rdfs:comment "Class representing a library document."@en ,
+                            "Classe que representa um documento bibliotecário."@pt ;
+               rdfs:label "Documento Bibliotecário" ,
+                          "Library Document" .
+
+
+###  http://guara.ueg.br/ontologias/v1/objetos#Documento_Historico1
+:Documento_Historico1 rdf:type owl:NamedIndividual ,
+                               :ObjetoDigital ;
+                      :id "documento1" ;
+                      dc:description "Um documento histórico importante." ;
+                      dc:title "Documento Histórico 1" .
+
+
+###  http://guara.ueg.br/ontologias/v1/objetos#Evento
+:Evento rdf:type owl:NamedIndividual ,
+                 :ObjetoDimensional .
+
+
+###  http://guara.ueg.br/ontologias/v1/objetos#Independencia_Brasil
+:Independencia_Brasil rdf:type owl:NamedIndividual ,
+                               :Evento ;
+                      :duracao "P1096Y"^^xsd:duration ;
+                      :id "evento1" ;
+                      :dataEvento "1822-09-07"^^xsd:date ;
+                      :localEvento :Palacio_Rio_Branco ;
+                      dc:description "Evento histórico que marcou a independência do Brasil de Portugal." ;
+                      dc:title "Independência do Brasil" .
+
+
+###  http://guara.ueg.br/ontologias/v1/objetos#Lugar
+:Lugar rdf:type owl:NamedIndividual ,
+                :ObjetoDimensional .
+
+
+###  http://guara.ueg.br/ontologias/v1/objetos#MuseuLogico
+:MuseuLogico rdf:type owl:NamedIndividual ,
+                      :ObjetoFisico ;
+             rdfs:comment "Class representing a museum document."@en ,
+                          "Classe que representa um documento museológico."@pt ;
+             rdfs:label "Documento Museológico" ,
+                        "Museum Document" .
+
+
+###  http://guara.ueg.br/ontologias/v1/objetos#Palacio_Rio_Branco
+:Palacio_Rio_Branco rdf:type owl:NamedIndividual ,
+                             :Lugar ;
+                    :id "lugar1" ;
+                    :coordenadas "-12.9712° N, -38.5016° W" ;
+                    :localDeOrigem "Salvador, Bahia, Brasil" ;
+                    dc:description "Palácio histórico em Salvador, Bahia, Brasil." ;
+                    dc:title "Palácio Rio Branco" .
+
+
+###  http://guara.ueg.br/ontologias/v1/objetos#Pessoa
+:Pessoa rdf:type owl:NamedIndividual ,
+                 :ObjetoDimensional .
+
+
+###  http://guara.ueg.br/ontologias/v1/objetos#Seculo_XX
+:Seculo_XX rdf:type owl:NamedIndividual ,
+                    :Tempo ;
+           :dataCriacao "1901-01-01"^^xsd:date ;
+           :dataModificacao "2000-12-31"^^xsd:date ;
+           :id "tempo1" ;
+           dc:description "Período histórico que abrange o século XX." ;
+           dc:title "Século XX" .
+
+
+###  http://guara.ueg.br/ontologias/v1/objetos#Tempo
+:Tempo rdf:type owl:NamedIndividual ,
+                :ObjetoDimensional .
+
+
+#################################################################
+#    Annotations
+#################################################################
+
+:Arqueologico rdfs:comment "Class representing an archaeological document."@en ,
+                           "Classe que representa um documento arqueológico."@pt ;
+              rdfs:label "Archaeological Document" ,
+                         "Arqueológico" ,
+                         "Documento Arqueológico" .
+
+
+:Evento rdfs:comment "Class representing an event, such as a historical event."@en ,
+                     "Classe que representa um evento, como um evento histórico."@pt ;
+        rdfs:label "Event" ,
+                   "Evento" .
+
+
+:Lugar rdfs:comment "Class representing a place."@en ,
+                    "Classe que representa um lugar."@pt ;
+       rdfs:label "Lugar" ,
+                  "Place" .
+
+
+:Pessoa rdfs:comment "Class representing a person."@en ,
+                     "Classe que representa uma pessoa."@pt ;
+        rdfs:label "Person" ,
+                   "Pessoa" .
+
+
+:Tempo rdfs:comment "Class representing time."@en ,
+                    "Classe que representa o tempo."@pt ;
+       rdfs:label "Tempo" ,
+                  "Time" .
+
+
+:alcunha rdfs:comment "alcunha ou apelido de alguém ou alguma coisa." .
+
+
+###  Generated by the OWL API (version 4.5.26.2023-07-17T20:34:13Z) https://github.com/owlcs/owlapi
+
+
+------------------- repositorios.owl
+@prefix :      <http://guara.ueg.br/ontologias/v1/repositorios#> .
+@prefix rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix owl:   <http://www.w3.org/2002/07/owl#> .
+@prefix xsd:   <http://www.w3.org/2001/XMLSchema#> .
+@prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://200.137.241.247:8080/fuseki/repositorios>
+        a             owl:Ontology ;
+        rdfs:comment  "uma ontologia utilizada para definir repositórios." .
+
+:contato  a     owl:DatatypeProperty .
+
+:nome   a                       owl:DatatypeProperty ;
+        owl:equivalentProperty  <http://purl.org/dc/terms/label> .
+
+:responsavel  a  owl:DatatypeProperty .
+
+:uri    a                       owl:DatatypeProperty ;
+        owl:equivalentProperty  <http://purl.org/dc/terms/identifier> .
+
+:Repositorio  a  owl:Class .
+
+:descricao  a                   owl:DatatypeProperty ;
+        owl:equivalentProperty  <http://purl.org/dc/terms/description> .
+
+<http://purl.org/dc/terms/description>
+        a       owl:DatatypeProperty .
+
+<http://purl.org/dc/terms/label>
+        a       owl:DatatypeProperty .
+
+<http://purl.org/dc/terms/identifier>
+        a       owl:DatatypeProperty .
+		
+
+------------------- repositoriosamigos.owl
+@prefix :      <http://guara.ueg.br/ontologias/v1/repositoriosamigos#> .
+@prefix rpa:   <http://guara.ueg.br/ontologias/v1/repositorios#> .
+@prefix rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix owl:   <http://www.w3.org/2002/07/owl#> .
+@prefix xsd:   <http://www.w3.org/2001/XMLSchema#> .
+@prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
+
+:       a                rpa:Repositorio ;
+        rpa:contato      "alisoncf@gmail.com" ;
+        rpa:descricao    "Um repositório para documentos cartoriais" ;
+        rpa:nome         "Repositório de Cartório (Teste)" ;
+        rpa:responsavel  "Alison Filgueiras" ;
+        rpa:uri          <http://200.137.241.247:8080/fuseki/cartorioobj2> .
+
+<http://200.137.241.247:8080/fuseki/dioceseobj#>
+        a                rpa:Repositorio ;
+        rpa:contato      "alison.filgueiras@ueg.br" ;
+        rpa:descricao    "Repositório de teste de uma diocese" ;
+        rpa:nome         "Diocese" ;
+        rpa:responsavel  "Alison C. Filgueiras" ;
+        rpa:uri          <http://200.137.241.247:8080/fuseki/dioceseobj> .
+
+<http://200.137.241.247:8080/fuseki/mplobj#>
+        a                rpa:Repositorio ;
+        rpa:contato      "alison.filgueiras@ueg.br" ;
+        rpa:descricao    "Repositório de teste do Museu Pedro Ludovico" ;
+        rpa:nome         "MPL" ;
+        rpa:responsavel  "Alison C. Filgueiras" ;
+        rpa:uri          <http://200.137.241.247:8080/fuseki/mplobj> .

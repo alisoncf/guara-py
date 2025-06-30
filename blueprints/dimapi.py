@@ -32,7 +32,7 @@ def list_dimensional_objects(): # Renomeado de 'list' para maior clareza
         schema:
           type: string
           format: uri
-        example: "http://localhost:3030/mydataset/sparql"
+        example: "http://localhost:3030/mydataset/query"
       - name: type
         in: query
         required: true
@@ -60,7 +60,7 @@ def list_dimensional_objects(): # Renomeado de 'list' para maior clareza
                 type: string
                 format: uri
                 description: URL do endpoint SPARQL do repositório.
-                example: "http://localhost:3030/mydataset/sparql"
+                example: "http://localhost:3030/mydataset/query"
               type:
                 type: string
                 description: Tipo de objeto dimensional (informativo, pois a query get_sparq_dim já filtra por obj:Pessoa, obj:Tempo, etc.).
@@ -131,26 +131,24 @@ def list_dimensional_objects(): # Renomeado de 'list' para maior clareza
 
     keyword = data.get('keyword')
     repo = data.get('repository')
-    # obj_type = data.get('type') # 'type' não é usado na query get_sparq_dim, ela já tem os tipos fixos.
 
     if not keyword:
         return jsonify({"error": "Invalid input", "message": "Campo 'keyword' é obrigatório."}), 400
     if not repo:
         return jsonify({"error": 'Invalid input', "message": "Campo 'repository' é obrigatório."}), 400
 
-    sparqapi_url = repo # URL do repositório é o endpoint SPARQL
+    sparqapi_url = repo
 
     try:
-        # A query get_sparq_dim já filtra por obj:Pessoa, obj:Tempo, obj:Lugar, obj:Evento
-        sparql_query = f'PREFIX : <{repo}#> ' + get_sparq_dim().replace('%keyword%', keyword)
+        # CORREÇÃO: Inferir a base URI do repositório a partir da URL do endpoint para construir o PREFIX corretamente.
+        repo_base_uri_inferred = sparqapi_url.rsplit('/', 1)[0] + "#"
+        sparql_query = f'PREFIX : <{repo_base_uri_inferred}> ' + get_sparq_dim().replace('%keyword%', keyword)
 
-        # Usando execute_sparql_query de utils.py
         result = execute_sparql_query(sparqapi_url, sparql_query)
         return jsonify(result)
 
     except Exception as e:
         current_app.logger.error(f"Erro ao listar objetos dimensionais: {str(e)}")
-        # Captura as exceções levantadas por execute_sparql_query
         if hasattr(e, 'args') and len(e.args) > 1 and isinstance(e.args[0], str) and "status" in e.args[0]:
             status_code = int(e.args[0].split("status ")[1].split(" ")[0])
             message = e.args[1]
@@ -160,157 +158,125 @@ def list_dimensional_objects(): # Renomeado de 'list' para maior clareza
         else:
             return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
-@dimapi_app.route('/listall', methods=['GET','POST'])
-def list_all_dimensional_or_physical(): # Renomeado de 'list_all'
+
+@dimapi_app.route('/listall', methods=['GET', 'POST'])
+def list_all_dimensional_or_physical():
     """
     Lista todos os objetos (físicos ou dimensionais) de um tipo específico ou todos se nenhum tipo for especificado,
     filtrados por palavra-chave.
-    Este endpoint suporta GET (com query parameters) e POST (com JSON body).
-    A documentação abaixo foca no método POST. Para GET, use os mesmos parâmetros como query strings.
     ---
     tags:
       - Objetos Dimensionais
       - Objetos Físicos
+    description: >
+      Este endpoint é flexível e aceita parâmetros de duas formas:
+      1.  **GET:** Parâmetros devem ser enviados via query string na URL.
+      2.  **POST:** Parâmetros podem ser enviados tanto no corpo (body) da requisição como um JSON,
+          quanto via query string na URL. Parâmetros no corpo JSON têm prioridade.
     parameters:
       - name: repository
         in: query
         required: true
-        description: URL do endpoint SPARQL do repositório (usado se o método for GET).
+        description: "URL do endpoint SPARQL do repositório. Obrigatório para GET, opcional para POST se fornecido no corpo."
         schema:
           type: string
           format: uri
-        example: "http://localhost:3030/mydataset/sparql"
+        example: "http://localhost:3030/festas_populares/query"
       - name: type
         in: query
         required: false
-        description: Tipo de objeto para listar (quem, quando, onde, oque, fisico). Se omitido, busca em todos os tipos. (usado se o método for GET).
+        description: "Tipo de objeto para listar (quem, quando, onde, oque, fisico). Se omitido, busca em todos."
         schema:
           type: string
           enum: ["quem", "quando", "onde", "oque", "fisico"]
         example: "quem"
       - name: keyword
         in: query
-        required: false # A query original get_sparq_all() usa %keyword%
-        description: Palavra-chave para filtrar os resultados (usado se o método for GET).
+        required: false
+        description: "Palavra-chave para filtrar os resultados."
         schema:
           type: string
-        example: "José"
+        example: "festa"
     requestBody:
-      description: Parâmetros para listar objetos (usado se o método for POST).
-      required: true
+      description: "Parâmetros para listar objetos (usado para método POST)."
       content:
         application/json:
           schema:
             type: object
-            required:
-              - repository
             properties:
               repository:
                 type: string
                 format: uri
-                description: URL do endpoint SPARQL do repositório.
-                example: "http://localhost:3030/mydataset/sparql"
+                description: "URL do endpoint SPARQL do repositório."
+                example: "http://localhost:3030/festas_populares/query"
               type:
                 type: string
                 required: false
-                description: Tipo de objeto para listar (quem, quando, onde, oque, fisico). Se omitido, busca em todos os tipos.
+                description: "Tipo de objeto para listar (quem, quando, onde, oque, fisico)."
                 enum: ["quem", "quando", "onde", "oque", "fisico"]
                 example: "fisico"
               keyword:
                 type: string
-                required: false # Assumindo que pode ser opcional
-                description: Palavra-chave para filtrar os resultados.
+                required: false
+                description: "Palavra-chave para filtrar os resultados."
                 example: "documento"
     responses:
-      200:
+      '200':
         description: Lista de objetos encontrada com sucesso.
-        content:
-          application/json:
-            schema:
-              # Schema para resultado JSON SPARQL padrão (get_sparq_all)
-              type: object
-              properties:
-                head:
-                  type: object
-                  properties:
-                    vars:
-                      type: array
-                      items:
-                        type: string
-                      example: ["id", "titulo", "descricao", "assunto", "tipo", "dimensao", "tipoFisico"]
-                results:
-                  type: object
-                  properties:
-                    bindings:
-                      type: array
-                      items:
-                        type: object # Exemplo de um binding
-                        properties:
-                          id: {"type": "object", "properties": {"type": {"type": "string", "example": "uri"}, "value": {"type": "string", "format": "uri", "example": "http://example.org/obj/Doc1"}}}
-                          titulo: {"type": "object", "properties": {"type": {"type": "string", "example": "literal"}, "value": {"type": "string", "example": "Relatório Anual"}}}
-                          # Adicionar outras vars conforme a query get_sparq_all
-      400:
-        description: Requisição inválida.
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                error: {"type": "string", "example": "Invalid input"}
-                message: {"type": "string", "example": "Campo 'repository' é obrigatório."}
-      500:
+      '400':
+        description: Requisição inválida (ex parâmetro 'repository' ausente).
+      '500':
         description: Erro interno no servidor.
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                error: {"type": "string", "example": "RequestException"}
-                message: {"type": "string", "example": "Connection refused"}
     """
-    if request.method == 'POST':
-        data = request.get_json()
-        if not data:
-            return jsonify({"error": "Invalid input", "message": "Request body cannot be empty for POST"}), 400
-    elif request.method == 'GET':
-        data = request.args
-    else:
-        return jsonify({"error": "Method Not Allowed"}), 405
+    # --- CORREÇÃO PRINCIPAL AQUI ---
+    # Unifica a busca de parâmetros para ser mais robusta.
+    # Prioriza o corpo JSON, mas aceita parâmetros da URL como fallback,
+    # mesmo para requisições POST.
 
-    repo = data.get('repository')
-    tipo_param = data.get('type', '') # Default para string vazia se não fornecido
-    keyword = data.get('keyword', '')   # Default para string vazia se não fornecido
+    # Tenta ler o corpo JSON. Se não houver, usa um dicionário vazio.
+    json_data = request.get_json(silent=True) or {}
+    # Sempre lê os argumentos da URL.
+    args_data = request.args
 
-    if not repo:
+    # Pega os parâmetros, dando prioridade ao corpo JSON.
+    repo_sparql_url = json_data.get('repository') or args_data.get('repository')
+    tipo_param = json_data.get('type', '') or args_data.get('type', '')
+    keyword = json_data.get('keyword', '') or args_data.get('keyword', '')
+
+    # A validação continua a mesma.
+    if not repo_sparql_url:
         return jsonify({"error": 'Invalid input', "message": "Campo 'repository' é obrigatório."}), 400
 
-    sparqapi_url = repo
-
-    # Mapeamento do parâmetro 'type' para o filtro SPARQL
-    # Se tipo_param for vazio, replace_tipo também será, e a query original get_sparq_all não filtrará por um tipo específico.
     replace_tipo = {
         'quem': 'a obj:Pessoa;',
         'quando': 'a obj:Tempo;',
         'onde': 'a obj:Lugar;',
         'oque': 'a obj:Evento;',
         'fisico': 'a obj:ObjetoFisico;'
-    }.get(tipo_param.lower(), '') # .lower() para case-insensitivity do parâmetro
+    }.get(tipo_param.lower(), '')
 
     try:
-        sparql_query = f'PREFIX : <{repo}#> ' + get_sparq_all()
+        # A URL base do repositório para o PREFIX deve ser inferida corretamente
+        # a partir da URL do endpoint SPARQL que o frontend enviou.
+        repo_base_uri_inferred = repo_sparql_url.rsplit('/', 1)[0] + "#"
+        
+        # Constrói a query usando os prefixos e a keyword
+        sparql_query = f'PREFIX : <{repo_base_uri_inferred}> ' + get_sparq_all()
         sparql_query = sparql_query.replace('%keyword%', keyword)
-        sparql_query = sparql_query.replace('%tipo%', replace_tipo) # %tipo% será substituído por vazio se tipo_param não corresponder
+        sparql_query = sparql_query.replace('%tipo%', replace_tipo)
+        
+        current_app.logger.debug(f"Executando SPARQL em {repo_sparql_url} com a query: {sparql_query}")
 
-        # Usando execute_sparql_query de utils.py
-        result = execute_sparql_query(sparqapi_url, sparql_query)
+        # Executa a consulta usando a URL CORRETA vinda do request
+        result = execute_sparql_query(repo_sparql_url, sparql_query)
         return jsonify(result)
 
     except Exception as e:
         current_app.logger.error(f"Erro ao listar todos os objetos: {str(e)}")
-        # Captura as exceções levantadas por execute_sparql_query
+        # O tratamento de erro já está bom e foi ele que nos ajudou a encontrar o problema.
         if hasattr(e, 'args') and len(e.args) > 1 and isinstance(e.args[0], str) and "status" in e.args[0]:
             status_code = int(e.args[0].split("status ")[1].split(" ")[0])
-            message = e.args[1]
+            message = str(e.args[1]) # Converte para string para garantir que é serializável
             return jsonify({"error": "SPARQL Query Error", "message": message}), status_code
         elif "Network error" in str(e):
             return jsonify({"error": "Network Error", "message": str(e)}), 500
@@ -595,7 +561,7 @@ def create_dimensional_object(): # Renomeado de 'create'
     object_id = str(uuid.uuid4())
     objeto_uri_completa = f"<{repo_base_uri}{object_id}>"
 
-    tipo_obj_uri = f"<{data['tipo_uri']}>" # URI completa do tipo (ex: <http://...#Pessoa>)
+    tipo_obj_uri = f"<{data['tipo_uri']}>" # URI completa do tipo (ex <http://...#Pessoa>)
 
     # Construção das partes da query
     triples = [
@@ -845,8 +811,8 @@ def remover_relacao_dimensional(): # Renomeado de 'remover_relacao'
     data = request.get_json()
     if not data: return jsonify({"error": "Invalid input", "message": "Request body cannot be empty"}), 400
 
-    s = data.get('s') # Espera-se URI completa ou literal formatado (ex: <uri> ou "literal"^^xsd:string)
-    p = data.get('p') # Espera-se URI completa (ex: <uri>)
+    s = data.get('s') # Espera-se URI completa ou literal formatado (ex <uri> ou "literal"^^xsd:string)
+    p = data.get('p') # Espera-se URI completa (ex <uri>)
     o = data.get('o') # Espera-se URI completa ou literal formatado
     sparql_update_url = data.get('repository_update_url')
 

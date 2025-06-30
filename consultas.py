@@ -1,6 +1,6 @@
 def get_base(): return """http://localhost:3030"""
 def get_prefix():
-    return """ PREFIX rdf:<http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+    return """PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
 PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
 PREFIX obj: <http://guara.ueg.br/ontologias/v1/objetos#>
@@ -9,7 +9,9 @@ PREFIX dc: <http://purl.org/dc/terms/>
 PREFIX cmg: <http://www.cmg.ueg.br/schema>
 PREFIX schema: <http://schema.org/>
 PREFIX geo: <http://www.opengis.net/ont/geosparql#>
-PREFIX owl: <http://www.w3.org/2002/07/owl#> """
+PREFIX owl: <http://www.w3.org/2002/07/owl#>
+PREFIX rpa: <http://localhost:3030/repositorios#>
+"""
 
 
 def get_sparq_dim():
@@ -30,20 +32,10 @@ def get_sparq_dim():
     ORDER BY ?dimensao ?titulo
             """
 def get_sparq_all():
+    # CORREÇÃO: Adicionado "?colecao" no SELECT e no GROUP BY, e "OPTIONAL { ?id obj:colecao ?colecao. }" no WHERE.
+    # Isso garante que a informação de qual coleção um objeto pertence seja retornada.
     return get_prefix() + """
-        PREFIX : <http://localhost:3030/festas_populares#> 
-        PREFIX geo: <http://www.opengis.net/ont/geosparql#> 
-PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
-PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
-PREFIX obj: <http://guara.ueg.br/ontologias/v1/objetos#>
-PREFIX classdef: <http://guara.ueg.br/ontologias/v1/classes#>
-PREFIX dc: <http://purl.org/dc/terms/>
-PREFIX cmg: <http://www.cmg.ueg.br/schema>
-PREFIX schema: <http://schema.org/>
-PREFIX owl: <http://www.w3.org/2002/07/owl#>
-
-SELECT ?id ?titulo ?descricao ?assunto ?tipo ?dimensao (GROUP_CONCAT(STR(?tipoFisicoRaw); separator=", ") AS ?tipoFisico)
+SELECT ?id ?titulo ?descricao ?assunto ?tipo ?dimensao ?colecao (GROUP_CONCAT(STR(?tipoFisicoRaw); separator=", ") AS ?tipoFisico)
 WHERE {
   ?id rdf:type ?tipoClasse ;
       dc:title ?titulo ;
@@ -53,6 +45,7 @@ WHERE {
 
   OPTIONAL { ?id obj:dimensao ?dimensaoRaw. }
   OPTIONAL { ?id obj:tipoFisico ?tipoFisicoRaw. }
+  OPTIONAL { ?id obj:colecao ?colecao. }
 
   FILTER (
     ?tipoClasse = obj:ObjetoFisico || ?tipoClasse = obj:ObjetoDimensional
@@ -72,9 +65,8 @@ WHERE {
     CONTAINS(LCASE(STR(?assunto)), LCASE("%keyword%"))
   )
 }
-GROUP BY ?id ?titulo ?descricao ?assunto ?tipo ?dimensao
+GROUP BY ?id ?titulo ?descricao ?assunto ?tipo ?dimensao ?colecao
 ORDER BY ?tipo ?titulo
-
             """
 
 def get_sparq_obj():
@@ -94,7 +86,6 @@ def get_sparq_obj():
 
 def get_sparq_class():
     return get_prefix() + """
-PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 SELECT DISTINCT ?class ?label ?description ?subclassof
 WHERE {
     ?class a owl:Class.
@@ -107,27 +98,16 @@ WHERE {
 
 
 def get_sparq_repo():
-    base = get_base()
-    prefixos = get_prefix()  # já vem formatado se você corrigiu como na resposta anterior
-    consulta = f"""
-PREFIX :     <{base}/repositoriosamigos#> 
-PREFIX rpa:  <{base}/repositorios#> 
-PREFIX rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> 
-PREFIX owl:  <http://www.w3.org/2002/07/owl#> 
-PREFIX xsd:  <http://www.w3.org/2001/XMLSchema#> 
-PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#> 
-
+    consulta = """
 SELECT ?nome ?uri ?contato ?descricao ?responsavel
-WHERE {{
+WHERE {
+  ?repo a rpa:Repositorio .
   ?repo rpa:uri ?uri.
   ?repo rpa:nome ?nome.
-  OPTIONAL {{ ?repo rpa:contato ?contato. }}
-  OPTIONAL {{ ?repo rpa:descricao ?descricao. }}
-  OPTIONAL {{ ?repo rpa:responsavel ?responsavel. }}
-}} ORDER BY ?nome
+  OPTIONAL { ?repo rpa:contato ?contato. }
+  OPTIONAL { ?repo rpa:descricao ?descricao. }
+  OPTIONAL { ?repo rpa:responsavel ?responsavel. }
+  %filter_aqui%
+} ORDER BY ?nome
 """
-    retorno = prefixos + "\n" + consulta
-    print('retorno', retorno)
-    return retorno
-
-    
+    return get_prefix() + consulta
