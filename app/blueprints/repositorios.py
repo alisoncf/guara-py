@@ -1,9 +1,9 @@
 from flask import Blueprint, request, jsonify
 import requests
-from consultas import get_sparq_repo, get_prefix
-from config_loader import load_config
+from ..consultas import get_sparq_repo, get_prefix
+from ..config_loader import load_config
 from urllib.parse import urlencode
-from config_loader import load_config
+from ..config_loader import load_config
 
 repo_app = Blueprint('repo_app', __name__)
 
@@ -32,8 +32,8 @@ def obter_repositorio_por_nome(name):
     
     return None  # Se não encontrar o repositórioreturn None 
 
-
-@repo_app.route('/listar_repositorios', methods=['GET'])
+@repo_app.route('/list', methods=['GET','POST'])
+@repo_app.route('/listar_repositorios', methods=['GET','POST'])
 def list():
     try:
         nome = request.args.get('name', default=None, type=str)

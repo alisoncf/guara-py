@@ -1,12 +1,13 @@
 from flask import Blueprint, request, jsonify
 import requests
-from consultas import get_sparq_class, get_prefix
-from config_loader import load_config
+from ..consultas import get_sparq_class, get_prefix
+from ..config_loader import load_config
 from urllib.parse import urlencode
 
 classapi_app = Blueprint('classapi_app', __name__)
 
 
+@classapi_app.route('/listar_classes', methods=['POST','GET'])
 @classapi_app.route('/list', methods=['POST','GET'])
 def list():
     try:

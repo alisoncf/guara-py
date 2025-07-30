@@ -1,0 +1,29 @@
+version: "3.9"
+
+services:
+  guara:
+    build: .
+    container_name: guara
+    ports:
+      - "5000:5000"
+    volumes:
+      - .:/app
+      - ./uploads:/uploads
+    depends_on:
+      - fuseki
+      - kraken
+    env_file:
+      - .env
+
+  fuseki:
+    image: stain/jena-fuseki
+    ports:
+      - "3030:3030"
+    volumes:
+      - ./fuseki:/fuseki
+
+  kraken:
+    image: readcoop/kraken
+    container_name: kraken
+    volumes:
+      - ./uploads:/data

@@ -1,4 +1,4 @@
-from config_loader import load_config
+from app.config_loader import load_config
 def get_base(): return load_config().get('fuseki_url')
 def get_prefix():
     return """ PREFIX rdf:<http://www.w3.org/1999/02/22-rdf-syntax-ns#>

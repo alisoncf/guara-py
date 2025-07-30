@@ -2,10 +2,10 @@ from flask import Blueprint, request, jsonify,current_app
 import requests, os
 import uuid
 # Importe suas funções corretamente
-from consultas import get_sparq_all,get_sparq_dim, get_prefix
-from config_loader import load_config
+from ..consultas import get_sparq_all,get_sparq_dim, get_prefix
+from ..config_loader import load_config
 from urllib.parse import urlencode
-from blueprints.auth import token_required
+from ..blueprints.auth import token_required
 relationapi_app = Blueprint('relationapi_app', __name__)
 
 

@@ -4,16 +4,14 @@ import json
 import uuid
 from datetime import datetime, timedelta
 from urllib.parse import urlencode
-from blueprints.repositorios import obter_repositorio_por_nome
+from ..blueprints.repositorios import obter_repositorio_por_nome
+from ..config_loader import load_config
 acessoapp = Blueprint('acessoapp', __name__)
 
 
-def load_config(filename):
-    with open(filename, 'r') as f:
-        return json.load(f)
 
 
-config = load_config('config.json')
+config = load_config()
 
 FUSEKI_URL = config.get('user_update_url')
 FUSEKI_QUERY_URL = config.get('user_query_url')

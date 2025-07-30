@@ -1,9 +1,9 @@
 from flask import Blueprint, request, jsonify
 import requests
-from consultas import get_sparq_repo, get_prefix
-from config_loader import load_config
+from app.consultas import get_sparq_repo, get_prefix
+from app.config_loader import load_config
 from urllib.parse import urlencode
-from config_loader import load_config
+from app.config_loader import load_config
 from auth import token_required 
 from utils.file_utils import salvar_arquivos
 from werkzeug.utils import secure_filename

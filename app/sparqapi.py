@@ -1,13 +1,15 @@
 from flask import Blueprint, request, jsonify
-import requests, json
+import requests, json, os
 
 sparqapi_app = Blueprint('sparqapi_app', __name__)
 
-def load_config1(filename):
-    with open(filename, 'r') as f:
+def load_config(filename):
+    base_path = os.path.dirname(__file__)  # pega o diretório do script atual
+    full_path = os.path.join(base_path, filename)
+    with open(full_path, 'r') as f:
         return json.load(f)
 
-config = load_config1('config.json')
+config = load_config('config.json')
 
 fuseki_update_url = config.get('fuseki_update_url')
 fuseki_query_url = config.get('fuseki_query_url')

@@ -1,7 +1,7 @@
 from functools import wraps
 from flask import request, jsonify
 from datetime import datetime
-from blueprints.acesso import execute_sparql_query  # ou onde estiver
+from ..blueprints.acesso import execute_sparql_query  # ou onde estiver
 from flask import g
 def token_required(f):
     @wraps(f)
