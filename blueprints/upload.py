@@ -1,8 +1,9 @@
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, jsonify, current_app, send_from_directory, abort
+
 import os, uuid, shutil
 from werkzeug.utils import secure_filename
 from  blueprints.objectapi import add_relation
-
+from datetime import datetime
 import requests 
 uploadapp = Blueprint('uploadapi', __name__)
 
@@ -39,9 +40,10 @@ def upload():
             if file.filename:
                 extensao = os.path.split(".")[-1]
             
-                filename = secure_filename(f"{uuid.uuid4().hex}{extensao}")
+                filename = secure_filename(f"{datetime.now()}{file.filename}.{extensao}")
+                print('path: ',filename)
                 file_path = os.path.join(objeto_folder, filename)
-                       
+            
                 file.save(file_path)
                 arquivos_salvos.append(filename)  # Armazena apenas o nome do arquivo
             
@@ -133,3 +135,15 @@ def remove_file():
     return jsonify({
         'message': 'Arquivos excluído com sucesso!'
     }), 200
+
+
+@uploadapp.route('/midias/<objeto_id>/<filename>')
+def serve_midia(objeto_id, filename):
+    upload_folder = current_app.config.get('UPLOAD_FOLDER')
+    objeto_folder = os.path.join(upload_folder, str(objeto_id))
+    file_path = os.path.join(objeto_folder, filename)
+
+    if os.path.isfile(file_path):
+        return send_from_directory(objeto_folder, filename)
+    else:
+        abort(404)
