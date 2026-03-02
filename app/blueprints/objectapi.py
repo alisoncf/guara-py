@@ -176,13 +176,14 @@ def create():
 
         # Remover partes vazias (strings vazias ou espaços em branco)
         parts = [part for part in parts if part.strip()]
+        parts_joined = ' ;\n                                '.join(parts)
 
         # Construção final da query SPARQL
         sparql_query = f"""{get_prefix()}
             PREFIX : <{repo}#>
             INSERT DATA {{
                 {objeto_uri} rdf:type obj:ObjetoFisico ;
-                                { ' ;\n'.join(parts) } .
+                                {parts_joined} .
             }}
         """
 
@@ -348,6 +349,7 @@ def update():
         resumo = '"""' + data["resumo"].replace('"""', '\\"""') + '"""'
         titulo = '"""' + data["titulo"].replace('"""', '\\"""') + '"""'
         if parts:
+            parts_joined = ' ;\n                        '.join(parts)
             sparql_query = f"""{get_prefix()}
                 PREFIX : <{repo}#>
                 DELETE {{
@@ -361,7 +363,7 @@ def update():
                         dc:description {descricao};
                         dc:abstract {resumo};
                         dc:title {titulo};
-                        {' ;\n'.join(parts)} .
+                        {parts_joined} .
                 }}
                 WHERE {{
                     {objeto_uri} dc:description ?oldDescription;

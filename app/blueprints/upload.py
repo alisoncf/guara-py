@@ -47,7 +47,8 @@ def upload():
             
             
                 objeto_uri = f":{objeto_id}"
-                midia_uri = f'"{file_path.replace("\\", "/")}"'
+                file_path_normalized = file_path.replace("\\", "/")
+                midia_uri = f'"{file_path_normalized}"'
                 print('midiaURI',midia_uri)
                 repositorio_uri = "http://www.guara.ueg.br/repositorio"  
                 propriedade = "schema:associatedMedia"
@@ -63,7 +64,8 @@ def upload():
     if len(links)>0:
         for file in arquivos:
             objeto_uri = f":{objeto_id}"
-            midia_uri = f'"{file_path.replace("\\", "/")}"'
+            file_path_normalized = file_path.replace("\\", "/")
+            midia_uri = f'"{file_path_normalized}"'
             print('midiaURI',midia_uri)
             repositorio_uri = "http://www.guara.ueg.br/repositorio"  
             propriedade = "schema:associatedMedia"
