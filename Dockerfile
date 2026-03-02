@@ -1,4 +1,4 @@
-FROM python:3.10-slim
+FROM python:3.8-slim
 
 WORKDIR /app
 
@@ -11,4 +11,4 @@ RUN apt update && apt install -y poppler-utils && \
 
 EXPOSE 5000
 
-CMD ["python", "app.py"]
+CMD ["python", "-m", "app.main"]
