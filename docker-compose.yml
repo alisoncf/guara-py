@@ -3,6 +3,8 @@ version: "3.9"
 services:
   guara:
     build: .
+    image: localhost/guara:latest
+    pull_policy: never
     container_name: guara
     ports:
       - "5000:5000"
@@ -11,7 +13,6 @@ services:
       - ./uploads:/uploads
     depends_on:
       - fuseki
-      - kraken
     env_file:
       - .env
 
@@ -20,10 +21,4 @@ services:
     ports:
       - "3030:3030"
     volumes:
-      - ./fuseki:/fuseki
-
-  kraken:
-    image: readcoop/kraken
-    container_name: kraken
-    volumes:
-      - ./uploads:/data
+      - ./fuseki:/fuseki:Z,U

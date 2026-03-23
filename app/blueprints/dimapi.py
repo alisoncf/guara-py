@@ -241,6 +241,7 @@ def create():
 
         # Remover partes vazias (strings vazias ou espaços em branco)
         parts = [part for part in parts if part.strip()]
+        parts_joined = ' ;\n                                '.join(parts)
 
         # Construção final da query SPARQL
         sparql_query = f"""{get_prefix()}
@@ -250,7 +251,7 @@ def create():
                 rdf:type obj:ObjetoDimensional ;
                 {coord}
                 obj:dimensao <{type}> ;
-                                { ' ;\n'.join(parts) } .
+                                {parts_joined} .
             }}
         """
 
