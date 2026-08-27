@@ -5,6 +5,8 @@ from flasgger import Swagger
 import os, ssl, requests
 from urllib3.exceptions import InsecureRequestWarning
 
+load_dotenv()
+
 # Blueprints
 from app.sparqapi import sparqapi_app
 from app.blueprints.classapi import classapi_app
@@ -17,15 +19,19 @@ from app.blueprints.midiaapi import midiaapi_app
 from app.blueprints.relationapi import relationapi_app
 
 def create_app():
-    load_dotenv()
-
     app = Flask(__name__)
     Swagger(app)
     CORS(app, resources={r"/*": {"origins": ["https://localhost:9000","http://localhost:9000"]}})
 
     app.config['UPLOAD_FOLDER'] = '/var/www/imagens'
     app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
-    app.config['ALLOWED_EXTENSIONS'] = {'jpg', 'jpeg', 'png', 'gif', 'mp4'}
+    app.config['ALLOWED_EXTENSIONS'] = {
+        'jpg', 'jpeg', 'png', 'gif', 'webp',
+        'mp4', 'mov', 'avi', 'webm',
+        'mp3', 'wav', 'ogg',
+        'pdf', 'doc', 'docx', 'odt',
+        'xls', 'xlsx', 'ppt', 'pptx', 'csv',
+    }
 
     # Blueprints
     app.register_blueprint(sparqapi_app, url_prefix='/sparqapi')

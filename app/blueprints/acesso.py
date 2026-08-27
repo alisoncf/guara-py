@@ -4,6 +4,7 @@ import json
 import uuid
 from datetime import datetime, timedelta
 from urllib.parse import urlencode
+from werkzeug.security import generate_password_hash, check_password_hash
 from ..blueprints.repositorios import obter_repositorio_por_nome
 from ..config_loader import load_config
 acessoapp = Blueprint('acessoapp', __name__)
@@ -37,7 +38,7 @@ def execute_sparql_query(query):
 
 
 def extrair_repositorio(url):
-    
+
     ultimo_barra_index = url.rfind('/')
     if ultimo_barra_index != -1:
         return url[ultimo_barra_index + 1:]
@@ -45,79 +46,91 @@ def extrair_repositorio(url):
         # Se não houver '/', retorne a própria URL
         return url
 
+
+def sparql_escape(value):
+    return (str(value)
+            .replace('\\', '\\\\')
+            .replace('"', '\\"')
+            .replace('\n', '\\n')
+            .replace('\r', '\\r'))
+
 @acessoapp.route('/login', methods=['POST'])
 def login():
+
     data = request.json
     email = data.get('email')
     password = data.get('password')
     repo = data.get('repository')
-    name=data.get('name')
-    query = f"""
-    PREFIX foaf: <http://xmlns.com/foaf/0.1/>
-    prefix :      <http://guara.ueg.br/ontologias/usuarios#> 
-    SELECT ?s ?permissao ?username ?repositorio WHERE {{
-        ?s foaf:mbox "{email}" ;
-           foaf:password "{password}" .
-           ?s :temPermissao ?permissao.
-           ?s :repo ?repositorio.
-           ?s :username ?username
-           FILTER(CONTAINS(LCASE(STR(?repositorio)), "{  str.lower(name) }"))
-    }}
-    """
-    #print('repo:',repo)
-    print('query',query)
-    results = execute_sparql_query(query)
-    #print('result:',results)
+    name = data.get('name')
 
+    try:
+        query = f"""
+        PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+        prefix :      <https://guara.ueg.br/fuseki/usuarios#>
+        SELECT ?s ?permissao ?username ?repositorio ?senha WHERE {{
+            ?s foaf:mbox "{sparql_escape(email)}" ;
+               foaf:password ?senha .
+               ?s :temPermissao ?permissao.
+               ?s :repo ?repositorio.
+               ?s :username ?username
+               FILTER(CONTAINS(LCASE(STR(?repositorio)), "{ sparql_escape(str.lower(name)) }"))
+        }}
+        """
 
+        results = execute_sparql_query(query)
+        if not results['results']['bindings']:
+            return jsonify({'message': 'Usuário ou senha inválidos para esse repositório'}), 401
 
-    
-    if not results['results']['bindings']:
-        return jsonify({'message': 'Usuário ou senha inválidos para esse repositório'}), 401
-    
-    
+        user_data = results['results']['bindings'][0]
+        stored_hash = user_data['senha']['value']
 
-    user_data = results['results']['bindings'][0]
-    user_uri = user_data['s']['value']
-    user_permission = user_data['permissao']['value']
-    user_name = user_data['username']['value']
-    repo = user_data['repositorio']['value']
+        if not check_password_hash(stored_hash, password):
+            return jsonify({'message': 'Usuário ou senha inválidos para esse repositório'}), 401
 
-    #buscar repositório
-    print('name',name)
-    repo_response = obter_repositorio_por_nome(name)
-    
-    print(repo_response)
-    
-    # Gerar token de autenticação
-    token = str(uuid.uuid4())
-    validade = datetime.now() + timedelta(hours=24)  # Token válido por 24 horas
+        user_uri = user_data['s']['value']
+        user_permission = user_data['permissao']['value']
+        user_name = user_data['username']['value']
+        repo = user_data['repositorio']['value']
 
-    # Atualizar RDF com token e validade
-    update = f"""
-    PREFIX : <http://guara.ueg.br/ontologias/usuarios#>
-    DELETE {{ <{user_uri}> :token ?old_token ; :validade ?old_validade }}
-    INSERT {{ <{user_uri}> :token "{token}" ; :validade "{validade.isoformat()}"}}
-    WHERE {{
-        OPTIONAL {{ <{user_uri}> :token ?old_token }}
-        OPTIONAL {{ <{user_uri}> :validade ?old_validade }}
-    }}
-    """
-    
-    response = execute_sparql_update(update)
-    if response.status_code != 200:
-        return jsonify({'message': 'Failed to update token and validade'}), 500
+        #buscar repositório
+        print('name', name)
+        repo_response = obter_repositorio_por_nome(name)
 
-    return jsonify({
-        'message': 'Login successful',
-        'user': user_name,
-        'email': email,
-        'permissao': user_permission,
-        'token': token,
-        'repositorio': repo,
-        'validade': validade.isoformat(),
-        'repositorio_conectado': repo_response  # Adicionando os repositórios
-    }), 200
+        print(repo_response)
+
+        # Gerar token de autenticação
+        token = str(uuid.uuid4())
+        validade = datetime.now() + timedelta(hours=24)  # Token válido por 24 horas
+
+        # Atualizar RDF com token e validade
+        update = f"""
+        PREFIX : <https://guara.ueg.br/fuseki/usuarios#>
+        DELETE {{ <{user_uri}> :token ?old_token ; :validade ?old_validade }}
+        INSERT {{ <{user_uri}> :token "{token}" ; :validade "{validade.isoformat()}"}}
+        WHERE {{
+            OPTIONAL {{ <{user_uri}> :token ?old_token }}
+            OPTIONAL {{ <{user_uri}> :validade ?old_validade }}
+        }}
+        """
+
+        response = execute_sparql_update(update)
+        if response.status_code != 200:
+            return jsonify({'message': 'Failed to update token and validade'}), 500
+
+        return jsonify({
+            'message': 'Login successful',
+            'user': user_name,
+            'email': email,
+            'permissao': user_permission,
+            'token': token,
+            'repositorio': repo,
+            'validade': validade.isoformat(),
+            'repositorio_conectado': repo_response  # Adicionando os repositórios
+        }), 200
+
+    except Exception as e:
+        print('Erro no login:', e)
+        return jsonify({'message': 'Erro interno ao processar o login'}), 500
 
 
 @acessoapp.route('/add_user', methods=['POST'])
@@ -127,13 +140,16 @@ def add_curador():
     password = data.get('password')
     permissao = data.get('permissao')
 
+    password_hash = generate_password_hash(password)
+
     update = f"""
-    PREFIX : <http://guara.ueg.br/ontologias/usuarios#>
+    PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+    PREFIX : <https://guara.ueg.br/fuseki/usuarios#>
     INSERT DATA {{
         :{username} rdf:type :Curador ;
-                   :username "{username}" ;
-                   :password "{password}" ;
-                   :temPermissao "{permissao}" .
+                   :username "{sparql_escape(username)}" ;
+                   foaf:password "{sparql_escape(password_hash)}" ;
+                   :temPermissao "{sparql_escape(permissao)}" .
     }}
     """
     response = execute_sparql_update(update)

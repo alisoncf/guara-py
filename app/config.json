@@ -1,10 +1,10 @@
 {
     
-    "fuseki_url": "http://localhost:3030",
-    "user_update_url": "http://localhost:3030/usuarios/update",
-    "user_query_url": "http://localhost:3030/usuarios/query",
-    "repo_update_url": "http://localhost:3030/repositoriosamigos/update",
-    "repo_query_url": "http://localhost:3030/repositoriosamigos/query",
+    "fuseki_url": "{{FUSEKI_BASE_URL}}",
+    "user_update_url": "{{FUSEKI_BASE_URL}}/usuarios/update",
+    "user_query_url": "{{FUSEKI_BASE_URL}}/usuarios/query",
+    "repo_update_url": "{{FUSEKI_BASE_URL}}/repositoriosamigos/update",
+    "repo_query_url": "{{FUSEKI_BASE_URL}}/repositoriosamigos/query",
     "prefix_base_class": "http://guara.ueg.br/ontologias/v1/classdef#",
     "prefix_base_obj": "http://guara.ueg.br/ontologias/v1/objetos#",
     "prefix_base_repo": "http://guara.ueg.br/ontologias/v1/repositoriosamigos#",

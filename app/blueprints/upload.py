@@ -1,10 +1,39 @@
-from flask import Blueprint, request, jsonify, current_app
-import os, uuid, shutil
+from flask import Blueprint, request, jsonify, current_app, send_from_directory
+import os, uuid, shutil, hashlib
 from werkzeug.utils import secure_filename
 from  ..blueprints.objectapi import add_relation
 
-import requests 
+import requests
 uploadapp = Blueprint('uploadapi', __name__)
+
+
+def sha256_arquivo(caminho, chunk_size=8192):
+    hasher = hashlib.sha256()
+    with open(caminho, 'rb') as f:
+        for chunk in iter(lambda: f.read(chunk_size), b''):
+            hasher.update(chunk)
+    return hasher.hexdigest()
+
+
+def sha256_upload(file_storage, chunk_size=8192):
+    hasher = hashlib.sha256()
+    file_storage.stream.seek(0)
+    for chunk in iter(lambda: file_storage.stream.read(chunk_size), b''):
+        hasher.update(chunk)
+    file_storage.stream.seek(0)
+    return hasher.hexdigest()
+
+
+@uploadapp.route('/midias/<objeto_id>/<filename>', methods=['GET'])
+def get_midia(objeto_id, filename):
+    upload_folder = current_app.config.get('UPLOAD_FOLDER')
+    objeto_folder = os.path.join(upload_folder, secure_filename(str(objeto_id)))
+    safe_filename = secure_filename(filename)
+
+    if not os.path.isfile(os.path.join(objeto_folder, safe_filename)):
+        return jsonify({'error': 'Arquivo não encontrado'}), 404
+
+    return send_from_directory(objeto_folder, safe_filename)
 
 @uploadapp.route('/upload', methods=['POST'])
 def upload():
@@ -32,14 +61,40 @@ def upload():
     if not arquivos_validos and len(links) == 0:
         return jsonify({'error': 'Nenhuma mídia ou link enviado'}), 400
 
+    # Verifica se todas as extensões são permitidas antes de salvar qualquer arquivo
+    allowed_extensions = current_app.config.get('ALLOWED_EXTENSIONS', set())
+    for file in arquivos_validos:
+        extensao = os.path.splitext(file.filename)[1].lower().lstrip('.')
+        if extensao not in allowed_extensions:
+            return jsonify({
+                'error': f'Extensão "{extensao}" não permitida para o arquivo "{file.filename}"',
+                'extensoes_permitidas': sorted(allowed_extensions)
+            }), 400
+
+    # Verifica duplicidade de conteúdo dentro do mesmo objeto (ignora a subpasta "excluidos")
+    hashes_existentes = {
+        sha256_arquivo(os.path.join(objeto_folder, nome))
+        for nome in os.listdir(objeto_folder)
+        if os.path.isfile(os.path.join(objeto_folder, nome))
+    }
+    for file in arquivos_validos:
+        file_hash = sha256_upload(file)
+        if file_hash in hashes_existentes:
+            return jsonify({
+                'error': f'O arquivo "{file.filename}" é idêntico a um arquivo já existente nesse objeto'
+            }), 409
+        hashes_existentes.add(file_hash)
+
     arquivos_salvos = []
 
     if len(arquivos)>0:
         for file in arquivos:
             if file.filename:
-                extensao = os.path.split(".")[-1]
-            
-                filename = secure_filename(f"{uuid.uuid4().hex}{extensao}")
+                nome_original, extensao = os.path.splitext(file.filename)
+                extensao = extensao.lower()
+                prefixo = uuid.uuid4().hex[:8]
+
+                filename = secure_filename(f"{prefixo}_{nome_original}{extensao}")
                 file_path = os.path.join(objeto_folder, filename)
                        
                 file.save(file_path)
@@ -103,27 +158,28 @@ def remove_file():
     destino_path = os.path.join(pasta_excluidos, file_name)
 
     if file_name:
-        
+
         file_path = os.path.join(objeto_folder, file_name)
         #os.remove (file_path)
-        try: 
-            shutil.move(file_path, destino_path)                
+        try:
+            shutil.move(file_path, destino_path)
         except:
             ()
         objeto_uri = f":{objeto_id}"
-        midia_uri = f":{file_name}"
+        file_path_normalized = file_path.replace("\\", "/")
+        midia_uri = f'"{file_path_normalized}"'
         propriedade = "schema:associatedMedia"
-        
 
         try:
             response = requests.delete(
-                "http://localhost:5000/objectapi/remover_relacao",  # URL da rota `adicionar_relacao`
+                "http://localhost:5000/fis/remover_relacao",  # URL da rota `remover_relacao`
                 json={
                     "s": objeto_uri,
                     "p": propriedade,
                     "o": midia_uri,
                     "repository": repository
-                }
+                },
+                headers={"Authorization": request.headers.get("Authorization", "")}
             )
 
             if response.status_code != 200:

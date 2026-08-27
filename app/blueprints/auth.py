@@ -1,8 +1,13 @@
+import os
 from functools import wraps
 from flask import request, jsonify
 from datetime import datetime
 from ..blueprints.acesso import execute_sparql_query  # ou onde estiver
 from flask import g
+
+FUSEKI_BASE_URL = os.getenv('FUSEKI_BASE_URL', 'http://localhost:3030')
+
+
 def token_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -12,8 +17,8 @@ def token_required(f):
 
         token = token.replace('Bearer ', '')
         query = f"""
-        PREFIX : <http://guara.ueg.br/ontologias/usuarios#>
-        SELECT ?user ?validade  (GROUP_CONCAT(?permissao; separator=", ") AS ?permissoes) 
+        PREFIX : <{FUSEKI_BASE_URL}/usuarios#>
+        SELECT ?user ?validade  (GROUP_CONCAT(?permissao; separator=", ") AS ?permissoes)
             WHERE {{
                 ?user :token "{token}" ;
                   :validade ?validade ;

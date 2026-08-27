@@ -276,7 +276,7 @@ def remover_relacao():
         
         s = data["s"]
         p = data["p"]
-        o = data["s"]
+        o = data["o"]
         
         
         sparqapi_url = f"{repo}/{load_config().get('update')}"

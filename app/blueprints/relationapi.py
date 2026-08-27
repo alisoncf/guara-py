@@ -55,7 +55,7 @@ def list():
                 }}
                 """
 
-        print('query',sparql_query) 
+        
         headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
                    'Accept': 'application/sparql-results+json,*/*;q=0.9',
                    'X-Requested-With': 'XMLHttpRequest'}
@@ -115,7 +115,7 @@ def add():
                 :{object_id} <{property}> {value} .
             }}"""
 
-        print('->', sparql_query)  # Debugging
+        
         # Enviar a query SPARQL para o endpoint de atualização
         headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
                    'Accept': 'application/sparql-results+json,*/*;q=0.9',
@@ -204,7 +204,7 @@ def remover_relacao():
         
         s = data["s"]
         p = data["p"]
-        o = data["s"]
+        o = data["o"]
         
         
         sparqapi_url = f"{repo}/{load_config().get('update')}"
@@ -285,7 +285,7 @@ def update():
                 dc:subject ?oldSubject.
             }}
         """
-        print('update',sparql_query)   
+        
         headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
                 'Accept': 'application/sparql-results+json,*/*;q=0.9',
                 'X-Requested-With': 'XMLHttpRequest'}
