@@ -1,4 +1,5 @@
 from flask import Blueprint, request, jsonify,current_app
+from .sparql_escape import escapar_literal_sparql, validar_uri_sparql, escapar_id_sparql
 import requests, os
 import uuid
 # Importe suas funções corretamente
@@ -6,6 +7,9 @@ from ..consultas import get_sparq_all,get_sparq_dim, get_prefix
 from ..config_loader import load_config
 from urllib.parse import urlencode
 from ..blueprints.auth import token_required
+import logging
+import warnings
+
 relationapi_app = Blueprint('relationapi_app', __name__)
 
 
@@ -99,14 +103,16 @@ def add():
         repo = data['repository']
         complemento = data['complemento'] if 'complemento' in data else ''
         prefixo = data['prefixo'] if 'prefixo' in data else ''
-        object_id = data['id']
+        object_id = escapar_id_sparql(data['id'])
         tipo=data['tipo_recurso']
         property = data['propriedade']
         valor = data['valor'] if complemento!='' else data['valor'] + complemento;
-        if  str.lower(tipo) =='uri': 
-           value=f"""<{valor}>"""
+        if str.lower(tipo) == 'uri':
+            valor_seguro = validar_uri_sparql(valor)
+            value = f"<{valor_seguro}>"
         else:
-            value=f"""'{valor}'"""
+            valor_seguro = escapar_literal_sparql(valor)
+            value = f'"{valor_seguro}"'
         sparqapi_url = repo
                 # Construção final da query SPARQL
         sparql_query = f"""{get_prefix()+ ' '+  prefixo}
@@ -264,7 +270,9 @@ def update():
         object_id = data['id']
         objeto_uri = f":{object_id}"
         sparqapi_url = repo+'/'+load_config().get('update')
-        
+        description_seguro = escapar_literal_sparql(description)
+        subject_seguro = escapar_literal_sparql(subject)
+        titulo_seguro = escapar_literal_sparql(titulo)
         
 
         sparql_query = f"""{get_prefix()}
@@ -275,9 +283,9 @@ def update():
             }}
             INSERT {{
                 {objeto_uri} 
-                    dc:description "{description}";
-                    dc:subject "{subject}";
-                    dc:title "{titulo}" .
+                    dc:description "{description_seguro}";
+                    dc:subject "{subject_seguro}";
+                    dc:title "{titulo_seguro}" .
             }}
             WHERE {{
                 {objeto_uri}  dc:title ?oldTitle ;
@@ -309,6 +317,7 @@ def update():
 @relationapi_app.route('/add_relation', methods=['POST'])
 @token_required
 def add_relation():
+    
     try:
         data = request.get_json()
         objeto = data["o"]

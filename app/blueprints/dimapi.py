@@ -8,6 +8,13 @@ from urllib.parse import urlencode
 from ..blueprints.auth import token_required
 dimapi_app = Blueprint('dimapi_app', __name__)
 
+DIMENSOES_VALIDAS = {
+    'pessoa': 'obj:Pessoa',
+    'tempo': 'obj:Tempo',
+    'lugar': 'obj:Lugar',
+    'evento': 'obj:Evento',
+}
+
 
 @dimapi_app.route('/list', methods=['GET','POST'])
 def list():
@@ -21,12 +28,23 @@ def list():
             return jsonify({"error": 'Invalid input', "message": "Expected JSON with 'repository' "}), 400
         keyword = data['keyword']
         repo = data['repository']
-        type = data['type']
-        
+        type = data.get('type')
+
+        if type:
+            dimensao = DIMENSOES_VALIDAS.get(str.lower(type))
+            if not dimensao:
+                return jsonify({
+                    "error": "Invalid input",
+                    "message": f"'type' inválido. Use um de: {', '.join(DIMENSOES_VALIDAS)}"
+                }), 400
+            dimensoes = dimensao
+        else:
+            dimensoes = ', '.join(DIMENSOES_VALIDAS.values())
+
         prefix_base = repo  + "#"
         sparqapi_url = repo
-        
-        sparql_query = f'PREFIX : <{repo}#> ' + get_sparq_dim().replace('%keyword%', keyword)
+
+        sparql_query = f'PREFIX : <{repo}#> ' + get_sparq_dim().replace('%keyword%', keyword).replace('%dimensoes%', dimensoes)
         
         print('query',sparql_query) 
         headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',

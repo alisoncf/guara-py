@@ -1,0 +1,6 @@
+dimensao,propriedade_sugerida,objeto_uri,titulo,similaridade
+Evento,:oque,https://guara.ueg.br/fuseki/festas_populares#5011b203-5afa-4706-8ed3-60706312aa8c,Folia de São João,0.7788
+Lugar,:onde,https://guara.ueg.br/fuseki/festas_populares#6e7f03f8-2818-4098-90ba-9db01c70d7fc,Cidade de Goiás,0.6176
+Pessoa,:quem,https://guara.ueg.br/fuseki/festas_populares#eee9c103-62e2-46dd-af1c-ce15d31e2f65,José Reinaldo Felipe Martins Filho,0.6864
+Pessoa,:quem,https://guara.ueg.br/fuseki/festas_populares#59128430-4c67-4a04-bf50-437a8eb9c94d,Alison Carlos Filgueiras,0.5027
+Tempo,:quando,https://guara.ueg.br/fuseki/festas_populares#91e241cf-952b-4109-80ac-af2adaeb6961,Útima sexta-feira do mês,0.5796

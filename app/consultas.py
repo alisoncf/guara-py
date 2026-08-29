@@ -18,7 +18,7 @@ def get_sparq_dim():
     SELECT DISTINCT ?obj ?titulo ?resumo ?descricao ?dimensao ?lat ?lon
     WHERE {
         ?obj a ?dimensao .
-        FILTER (?dimensao IN (obj:Pessoa, obj:Tempo, obj:Lugar, obj:Evento)).
+        FILTER (?dimensao IN (%dimensoes%)).
         ?obj dc:title ?titulo.
         ?obj dc:abstract ?resumo.
         OPTIONAL { ?obj dc:description ?descricao . }
