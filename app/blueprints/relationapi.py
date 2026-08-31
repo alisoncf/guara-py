@@ -35,30 +35,35 @@ def list():
         sparqapi_url = repo
         
         sparql_query = get_prefix() + f"""
-                SELECT ?id ?propriedade ?valor  
+                SELECT ?id ?propriedade ?valor ?direcao
                     (IF(isURI(?valor), "URI", "Literal") AS ?tipo_recurso)
                     ?titulo
+                    ?tipoDimensao
                 WHERE {{
                 {{
                     # Relações diretas
                     ?id ?propriedade ?valor .
                     FILTER(?id = <{objectUri}>)
+                    BIND("direta" AS ?direcao)
                 }}
                 UNION
                 {{
                     # Relações inversas
                     ?valor ?propriedade ?id .
                     FILTER(?id = <{objectUri}>)
-                    BIND("direta" AS ?direcao)
+                    BIND("inversa" AS ?direcao)
                 }}
                 OPTIONAL {{
                     ?valor dc:title ?titulo .
                     FILTER(isURI(?valor))
-                    BIND("direta" AS ?direcao)
+                }}
+                OPTIONAL {{
+                    ?valor obj:dimensao ?tipoDimensao .
                 }}
                 }}
                 """
 
+        
         
         headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
                    'Accept': 'application/sparql-results+json,*/*;q=0.9',
