@@ -39,6 +39,7 @@ def list():
                     (IF(isURI(?valor), "URI", "Literal") AS ?tipo_recurso)
                     ?titulo
                     ?tipoDimensao
+                    (STRAFTER(STR(?valor), "#") AS ?objAssociado)
                 WHERE {{
                 {{
                     # Relações diretas
@@ -62,8 +63,6 @@ def list():
                 }}
                 }}
                 """
-
-        
         
         headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
                    'Accept': 'application/sparql-results+json,*/*;q=0.9',

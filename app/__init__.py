@@ -17,6 +17,7 @@ from app.blueprints.upload import uploadapp
 from app.blueprints.dimapi import dimapi_app
 from app.blueprints.midiaapi import midiaapi_app
 from app.blueprints.relationapi import relationapi_app
+from app.blueprints.iaapi import iaapi_app
 
 def create_app():
     app = Flask(__name__)
@@ -43,6 +44,7 @@ def create_app():
     app.register_blueprint(dimapi_app, url_prefix='/dim')
     app.register_blueprint(midiaapi_app, url_prefix='/midias')
     app.register_blueprint(relationapi_app, url_prefix='/relation')
+    app.register_blueprint(iaapi_app, url_prefix='/ia')
 
     # Ambiente
     environment = os.getenv('FLASK_ENV', 'production')
