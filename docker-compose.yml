@@ -1,24 +1,29 @@
+
 version: "3.9"
 
 services:
-  guara:
-    build: .
-    image: localhost/guara:latest
-    pull_policy: never
-    container_name: guara
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: guara-api
+    working_dir: /app
+    command: python -m app.main
     ports:
       - "5000:5000"
     volumes:
       - .:/app
-      - ./uploads:/uploads
-    depends_on:
-      - fuseki
+      - ./uploads:/app/uploads
     env_file:
       - .env
+    environment:
+      FLASK_ENV: development
+      PYTHONUNBUFFERED: "1"
+      FUSEKI_BASE_URL: https://guara.ueg.br/fuseki
+    depends_on:
+      - fuseki
+    restart: unless-stopped
 
-  fuseki:
-    image: stain/jena-fuseki
-    ports:
-      - "3030:3030"
-    volumes:
-      - ./fuseki:/fuseki:Z,U
+  
+
+
