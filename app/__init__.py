@@ -24,7 +24,10 @@ from app.blueprints.recomendacao_app import recomendacao_app
 def create_app():
     app = Flask(__name__)
     Swagger(app)
-    CORS(app, resources={r"/*": {"origins": ["https://localhost:9000","http://localhost:9000"]}})
+    CORS(app, resources={r"/*": {"origins": [
+        "https://localhost:9000", "http://localhost:9000",
+        "https://localhost:8080", "http://localhost:8080",
+    ]}})
 
     app.config['UPLOAD_FOLDER'] = '/var/www/imagens'
     app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
