@@ -265,17 +265,23 @@ class ModeloEmbeddings:
     Este wrapper implementa a opção (a) via transformers puro + mean pooling,
     que funciona com o checkpoint oficial neuralmind/bert-base-portuguese-cased.
     """
-    modelo_nome: str = "neuralmind/bert-base-portuguese-cased"
+    #modelo_nome: str = "neuralmind/bert-base-portuguese-cased"
+    modelo_nome: str = "rufimelo/bert-large-portuguese-cased-sts"
     _tokenizer: object = field(default=None, repr=False)
     _modelo: object = field(default=None, repr=False)
+    
+    #def carregar(self):
+    #    from transformers import AutoTokenizer, AutoModel
+    #    import torch  # noqa: F401  (garante que torch está instalado)
 
+    #    self._tokenizer = AutoTokenizer.from_pretrained(self.modelo_nome)
+    #    self._modelo = AutoModel.from_pretrained(self.modelo_nome)
+    #    self._modelo.eval()
+    #    return self
+    
     def carregar(self):
-        from transformers import AutoTokenizer, AutoModel
-        import torch  # noqa: F401  (garante que torch está instalado)
-
-        self._tokenizer = AutoTokenizer.from_pretrained(self.modelo_nome)
-        self._modelo = AutoModel.from_pretrained(self.modelo_nome)
-        self._modelo.eval()
+        from sentence_transformers import SentenceTransformer
+        self._modelo = SentenceTransformer(self.modelo_nome)
         return self
 
     def _mean_pooling(self, model_output, attention_mask):
@@ -287,26 +293,30 @@ class ModeloEmbeddings:
         contagem = torch.clamp(mask.sum(dim=1), min=1e-9)
         return soma / contagem
 
-    def embed(self, textos: list[str], batch_size: int = 16) -> np.ndarray:
-        import torch
+    #def embed(self, textos: list[str], batch_size: int = 16) -> np.ndarray:
+    #    import torch
 
+    #    if self._modelo is None:
+    #        self.carregar()
+
+    #    todos_embeddings = []
+    #    with torch.no_grad():
+    #        for i in range(0, len(textos), batch_size):
+    #            lote = textos[i:i + batch_size]
+    #            encoded = self._tokenizer(
+    #                lote, padding=True, truncation=True,
+    #                max_length=256, return_tensors="pt",
+    #            )
+    #            saida = self._modelo(**encoded)
+    #            pooled = self._mean_pooling(saida, encoded["attention_mask"])
+    #            todos_embeddings.append(pooled.cpu().numpy())
+
+    #@    return np.vstack(todos_embeddings)
+
+def embed(self, textos: list[str], batch_size: int = 16) -> np.ndarray:
         if self._modelo is None:
             self.carregar()
-
-        todos_embeddings = []
-        with torch.no_grad():
-            for i in range(0, len(textos), batch_size):
-                lote = textos[i:i + batch_size]
-                encoded = self._tokenizer(
-                    lote, padding=True, truncation=True,
-                    max_length=256, return_tensors="pt",
-                )
-                saida = self._modelo(**encoded)
-                pooled = self._mean_pooling(saida, encoded["attention_mask"])
-                todos_embeddings.append(pooled.cpu().numpy())
-
-        return np.vstack(todos_embeddings)
-
+        return self._modelo.encode(textos, batch_size=batch_size)
 
 def gerar_embeddings(df: pd.DataFrame, modelo: Optional[ModeloEmbeddings] = None) -> np.ndarray:
     """Gera embeddings BERTimbau para a coluna 'texto' do DataFrame."""
