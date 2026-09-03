@@ -44,30 +44,26 @@ from sklearn.metrics.pairwise import cosine_similarity
 # IMPORTANTE (confirmado nos dados reais): os indivíduos usam dc:title e
 # dc:description DIRETAMENTE (não as propriedades locais :titulo/:descricao,
 # que existem na ontologia como subPropertyOf mas não aparecem populadas nos
-# exemplos). Alguns objetos (ex. classe :Lugar) usam dc:abstract em vez de
-# dc:description para o texto longo — por isso a query usa UNION/OPTIONAL
-# para capturar title + (description OU abstract), o que for encontrado.
+# exemplos). dc:abstract NÃO é uma alternativa a dc:description — é um
+# terceiro campo distinto (mapeado ao campo "resumo" do formulário), muitas
+# vezes preenchido com um texto mais longo e detalhado que a própria
+# descrição. Os três são buscados em OPTIONALs separados e concatenados.
 #
 # :oque e :quando EXISTEM na ontologia (domain :ObjetoDigital, range :Evento
-# e :Tempo) mas não apareciam na amostra inicial por ainda não estarem
-# populados com dados. Mantidos na query de relações — vão aparecer assim
-# que o acervo crescer.
+# e :Tempo) e já aparecem populados no acervo.
 
 SPARQL_QUERY_OBJETOS = """
 PREFIX dc: <http://purl.org/dc/terms/>
 PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
 PREFIX obj: <http://guara.ueg.br/ontologias/v1/objetos#>
 
-SELECT ?objeto ?tipo ?titulo ?texto_descritivo ?colecao
+SELECT ?objeto ?tipo ?titulo ?descricao ?resumo ?colecao
 WHERE {
     ?objeto dc:title ?titulo .
     OPTIONAL { ?objeto rdf:type ?tipo }
     OPTIONAL { ?objeto obj:colecao ?colecao }
-    OPTIONAL {
-        { ?objeto dc:description ?texto_descritivo }
-        UNION
-        { ?objeto dc:abstract ?texto_descritivo }
-    }
+    OPTIONAL { ?objeto dc:description ?descricao }
+    OPTIONAL { ?objeto dc:abstract ?resumo }
 }
 """
 
@@ -87,8 +83,8 @@ WHERE {
 
 def extrair_objetos_do_guara(endpoint_url: str) -> pd.DataFrame:
     """Consulta o endpoint SPARQL do Guará e retorna um DataFrame com os
-    objetos digitais e suas descrições textuais (título + descrição
-    concatenados, que é o texto que vai para o BERTimbau).
+    objetos digitais e seus três campos textuais (título + descrição +
+    resumo/abstract, concatenados no campo 'texto' que vai para o BERTimbau).
     """
     from SPARQLWrapper import SPARQLWrapper, JSON
 
@@ -103,7 +99,8 @@ def extrair_objetos_do_guara(endpoint_url: str) -> pd.DataFrame:
             "objeto_uri": r["objeto"]["value"],
             "tipo": r.get("tipo", {}).get("value", ""),
             "titulo": r.get("titulo", {}).get("value", ""),
-            "descricao": r.get("texto_descritivo", {}).get("value", ""),
+            "descricao": r.get("descricao", {}).get("value", ""),
+            "resumo": r.get("resumo", {}).get("value", ""),
             "colecao": r.get("colecao", {}).get("value", ""),
         })
 
@@ -117,7 +114,11 @@ def extrair_objetos_do_guara(endpoint_url: str) -> pd.DataFrame:
             .drop_duplicates(subset="objeto_uri", keep="first")
             .reset_index(drop=True)
         )
-    df["texto"] = (df["titulo"].fillna("") + ". " + df["descricao"].fillna("")).str.strip()
+    df["texto"] = (
+        df["titulo"].fillna("") + ". " +
+        df["descricao"].fillna("") + ". " +
+        df["resumo"].fillna("")
+    ).str.strip()
     return df
 
 
@@ -251,75 +252,36 @@ def carregar_dados_exemplo() -> pd.DataFrame:
 
 @dataclass
 class ModeloEmbeddings:
-    """Wrapper simples em torno do BERTimbau via sentence-transformers.
+    """Wrapper em torno de um modelo de sentence embeddings via
+    sentence-transformers.
 
-    NOTA: BERTimbau não foi treinado nativamente como sentence-encoder (ao
-    contrário de modelos da família sentence-transformers/SBERT). Duas
-    estratégias são possíveis:
-      (a) mean pooling sobre a última camada oculta do BERTimbau puro
-          (mais simples, mas menos calibrado para similaridade de frases);
-      (b) usar uma versão do BERTimbau já adaptada para STS/similaridade
-          textual (ex. fine-tunings da comunidade no Hugging Face Hub) —
-          RECOMENDADO se disponível, pois a própria avaliação original do
-          BERTimbau já usa STS como uma das tarefas de benchmark.
-    Este wrapper implementa a opção (a) via transformers puro + mean pooling,
-    que funciona com o checkpoint oficial neuralmind/bert-base-portuguese-cased.
+    NOTA HISTÓRICA: BERTimbau puro (neuralmind/bert-base-portuguese-cased)
+    não foi treinado nativamente como sentence-encoder — usá-lo direto com
+    mean pooling manual (implementação anterior deste wrapper) funciona,
+    mas não é calibrado para similaridade de frases. Trocamos para uma
+    versão já fine-tunada especificamente para STS (Similaridade Textual
+    Semântica) em português, derivada do próprio BERTimbau: o
+    'rufimelo/bert-large-portuguese-cased-sts', treinado sobre ASSIN,
+    ASSIN2 e STS Benchmark PT. A biblioteca sentence-transformers já
+    embute a estratégia de pooling correta para esse checkpoint — não
+    precisamos mais implementar mean pooling manualmente.
     """
-    #modelo_nome: str = "neuralmind/bert-base-portuguese-cased"
     modelo_nome: str = "rufimelo/bert-large-portuguese-cased-sts"
-    _tokenizer: object = field(default=None, repr=False)
     _modelo: object = field(default=None, repr=False)
-    
-    #def carregar(self):
-    #    from transformers import AutoTokenizer, AutoModel
-    #    import torch  # noqa: F401  (garante que torch está instalado)
 
-    #    self._tokenizer = AutoTokenizer.from_pretrained(self.modelo_nome)
-    #    self._modelo = AutoModel.from_pretrained(self.modelo_nome)
-    #    self._modelo.eval()
-    #    return self
-    
     def carregar(self):
         from sentence_transformers import SentenceTransformer
         self._modelo = SentenceTransformer(self.modelo_nome)
         return self
 
-    def _mean_pooling(self, model_output, attention_mask):
-        import torch
-
-        token_embeddings = model_output[0]  # (batch, seq_len, hidden)
-        mask = attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
-        soma = torch.sum(token_embeddings * mask, dim=1)
-        contagem = torch.clamp(mask.sum(dim=1), min=1e-9)
-        return soma / contagem
-
-    #def embed(self, textos: list[str], batch_size: int = 16) -> np.ndarray:
-    #    import torch
-
-    #    if self._modelo is None:
-    #        self.carregar()
-
-    #    todos_embeddings = []
-    #    with torch.no_grad():
-    #        for i in range(0, len(textos), batch_size):
-    #            lote = textos[i:i + batch_size]
-    #            encoded = self._tokenizer(
-    #                lote, padding=True, truncation=True,
-    #                max_length=256, return_tensors="pt",
-    #            )
-    #            saida = self._modelo(**encoded)
-    #            pooled = self._mean_pooling(saida, encoded["attention_mask"])
-    #            todos_embeddings.append(pooled.cpu().numpy())
-
-    #@    return np.vstack(todos_embeddings)
-
-def embed(self, textos: list[str], batch_size: int = 16) -> np.ndarray:
+    def embed(self, textos: list[str], batch_size: int = 16) -> np.ndarray:
         if self._modelo is None:
             self.carregar()
         return self._modelo.encode(textos, batch_size=batch_size)
 
+
 def gerar_embeddings(df: pd.DataFrame, modelo: Optional[ModeloEmbeddings] = None) -> np.ndarray:
-    """Gera embeddings BERTimbau para a coluna 'texto' do DataFrame."""
+    """Gera embeddings (modelo STS em português) para a coluna 'texto' do DataFrame."""
     modelo = modelo or ModeloEmbeddings()
     return modelo.embed(df["texto"].tolist())
 
@@ -545,5 +507,4 @@ if __name__ == "__main__":
     # Trocar por: main(endpoint_url="https://guara.ueg.br/fuseki/festas_populares/sparql")
     # Também dá pra passar um texto real de objeto novo para testar o modo 2:
     # main(endpoint_url=None, texto_objeto_novo_demo="Título. Descrição do objeto novo.")
-    #main(endpoint_url=None)
     main(endpoint_url="https://guara.ueg.br/fuseki/festas_populares/sparql")

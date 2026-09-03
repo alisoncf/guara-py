@@ -80,15 +80,12 @@ def _extrair_acervo_dimensional(repo: str) -> pd.DataFrame:
     são alvo válido dessas quatro propriedades.
     """
     sparql_query = get_prefix() + f"""
-        SELECT ?id ?titulo ?descricao ?tipoDimensao
+        SELECT ?id ?titulo ?descricao ?resumo ?tipoDimensao
         WHERE {{
             ?id obj:dimensao ?tipoDimensao .
             ?id dc:title ?titulo .
-            OPTIONAL {{
-                {{ ?id dc:description ?descricao }}
-                UNION
-                {{ ?id dc:abstract ?descricao }}
-            }}
+            OPTIONAL {{ ?id dc:description ?descricao }}
+            OPTIONAL {{ ?id dc:abstract ?resumo }}
         }}
     """
     headers = {
@@ -112,11 +109,16 @@ def _extrair_acervo_dimensional(repo: str) -> pd.DataFrame:
             "tipo": tipo_nome,
             "titulo": b.get("titulo", {}).get("value", ""),
             "descricao": b.get("descricao", {}).get("value", ""),
+            "resumo": b.get("resumo", {}).get("value", ""),
         })
 
-    df = pd.DataFrame(linhas, columns=["objeto_uri", "tipo", "titulo", "descricao"])
+    df = pd.DataFrame(linhas, columns=["objeto_uri", "tipo", "titulo", "descricao", "resumo"])
     if not df.empty:
-        df["texto"] = (df["titulo"].fillna("") + ". " + df["descricao"].fillna("")).str.strip()
+        df["texto"] = (
+            df["titulo"].fillna("") + ". " +
+            df["descricao"].fillna("") + ". " +
+            df["resumo"].fillna("")
+        ).str.strip()
     return df
 
 
