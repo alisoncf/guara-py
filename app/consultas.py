@@ -15,7 +15,7 @@ def get_prefix():
 
 def get_sparq_dim():
     return get_prefix() + """
-    SELECT DISTINCT ?obj ?titulo ?resumo ?descricao ?dimensao ?lat ?lon
+    SELECT DISTINCT ?obj ?titulo ?resumo ?descricao ?dimensao ?lat ?lon ?colecao
     WHERE {
         ?obj a ?dimensao .
         FILTER (?dimensao IN (%dimensoes%)).
@@ -23,6 +23,7 @@ def get_sparq_dim():
         ?obj dc:abstract ?resumo.
         OPTIONAL { ?obj dc:description ?descricao . }
         OPTIONAL { ?obj obj:tipoFisico ?tipo. }
+        OPTIONAL { ?obj obj:colecao ?colecao. }
         OPTIONAL { ?obj geo:lat ?lat. }
         OPTIONAL { ?obj geo:lon ?lon. }
         FILTER (regex(?obj, '%keyword%', 'i') || regex(?titulo, '%keyword%', 'i') || regex(?resumo, '%keyword%', 'i'))

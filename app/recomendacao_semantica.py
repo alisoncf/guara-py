@@ -60,7 +60,7 @@ PREFIX obj: <http://guara.ueg.br/ontologias/v1/objetos#>
 SELECT ?objeto ?tipo ?titulo ?descricao ?resumo ?colecao
 WHERE {
     ?objeto dc:title ?titulo .
-    OPTIONAL { ?objeto rdf:type ?tipo }
+    OPTIONAL { ?objeto obj:dimensao ?tipo }
     OPTIONAL { ?objeto obj:colecao ?colecao }
     OPTIONAL { ?objeto dc:description ?descricao }
     OPTIONAL { ?objeto dc:abstract ?resumo }
@@ -95,25 +95,27 @@ def extrair_objetos_do_guara(endpoint_url: str) -> pd.DataFrame:
 
     linhas = []
     for r in resultados["results"]["bindings"]:
+        tipo_uri = r.get("tipo", {}).get("value", "")
+        # obj:dimensao vem como URI completa (ex. .../objetos#Pessoa) —
+        # extrai só o nome da classe (Pessoa/Evento/Lugar/Tempo), igual ao
+        # que o blueprint Flask já faz. Objetos físicos (sem obj:dimensao)
+        # ficam com tipo="" — continuam entrando no Modo 1 (descoberta
+        # pareada), só não são candidatos no Modo 2 (filtro por dimensão).
+        tipo_nome = tipo_uri.rsplit("#", 1)[-1] if "#" in tipo_uri else tipo_uri
         linhas.append({
             "objeto_uri": r["objeto"]["value"],
-            "tipo": r.get("tipo", {}).get("value", ""),
+            "tipo": tipo_nome,
             "titulo": r.get("titulo", {}).get("value", ""),
             "descricao": r.get("descricao", {}).get("value", ""),
             "resumo": r.get("resumo", {}).get("value", ""),
             "colecao": r.get("colecao", {}).get("value", ""),
         })
 
+    # obj:dimensao é de valor único por objeto (ao contrário de rdf:type,
+    # que pode ter várias classes ao mesmo tempo), então não há mais
+    # necessidade de deduplicar por "tipo mais específico" — cada objeto já
+    # aparece em uma única linha.
     df = pd.DataFrame(linhas)
-    # Alguns objetos digitais têm múltiplas linhas (ex.: mais de um rdf:type,
-    # como owl:NamedIndividual + a classe dimensional específica) — agrupa
-    # por URI e mantém o tipo mais específico (o que não é owl:NamedIndividual).
-    if not df.empty:
-        df = (
-            df.sort_values("tipo", key=lambda s: s.str.contains("NamedIndividual"))
-            .drop_duplicates(subset="objeto_uri", keep="first")
-            .reset_index(drop=True)
-        )
     df["texto"] = (
         df["titulo"].fillna("") + ". " +
         df["descricao"].fillna("") + ". " +
@@ -337,7 +339,7 @@ def sugerir_ligacoes_para_novo_objeto(
     embeddings_acervo: np.ndarray,
     modelo: Optional["ModeloEmbeddings"] = None,
     top_k_por_dimensao: int = 3,
-    limiar: float = 0.5,
+    limiar: Optional[float] = None,
 ) -> pd.DataFrame:
     """MODO ASSISTENTE DE CURADORIA — o fluxo real de uso no Guará.
 
@@ -348,6 +350,19 @@ def sugerir_ligacoes_para_novo_objeto(
     objeto — e devolve, por dimensão, as melhores sugestões de ligação
     (candidatas a virarem triplos :quem/:oque/:onde/:quando após confirmação
     humana do curador).
+
+    IMPORTANTE (decisão de design revisada): por padrão, esta função sempre
+    devolve o top-k por dimensão, INDEPENDENTE do score de similaridade —
+    ela não filtra nada por conta própria. O motivo: a escala de scores
+    muda conforme o modelo de embeddings usado (comparamos isso na prática
+    entre BERTimbau puro e a versão fine-tunada para STS — os scores do
+    segundo são sistematicamente mais baixos, mesmo para pares plausíveis,
+    porque o modelo é mais discriminativo). Um limiar fixo no cálculo ficaria
+    desatualizado a cada troca de modelo ou crescimento do acervo. Em vez
+    disso, o corte (se quiser algum) deve ser uma decisão de EXIBIÇÃO na
+    interface — o curador vê o score de cada sugestão e julga. Se ainda
+    assim quiser filtrar aqui (ex.: para testes/relatórios), passe um valor
+    explícito em `limiar`; o padrão (None) não filtra nada.
 
     Parâmetros:
         texto_novo_objeto:   título + descrição do objeto recém-cadastrado
@@ -361,8 +376,10 @@ def sugerir_ligacoes_para_novo_objeto(
                                o acervo inteiro a cada novo objeto).
         modelo:               instância de ModeloEmbeddings já carregada (reaproveita
                                o modelo em memória); se None, carrega uma nova.
-        top_k_por_dimensao:   quantas sugestões trazer para cada uma das 4 dimensões.
-        limiar:                similaridade mínima para uma sugestão aparecer.
+        top_k_por_dimensao:   quantas sugestões trazer para cada uma das 4 dimensões
+                               (sempre traz até k, mesmo com score baixo).
+        limiar:                opcional; se informado, descarta sugestões abaixo
+                               desse score. Padrão None = sem filtro nenhum.
 
     Retorna um DataFrame com colunas:
         dimensao, propriedade_sugerida, objeto_uri, titulo, similaridade
@@ -386,7 +403,7 @@ def sugerir_ligacoes_para_novo_objeto(
         pares = sorted(zip(indices_candidatos, sims), key=lambda x: x[1], reverse=True)
 
         for idx, score in pares[:top_k_por_dimensao]:
-            if score < limiar:
+            if limiar is not None and score < limiar:
                 continue
             linhas.append({
                 "dimensao": dimensao,
@@ -483,10 +500,13 @@ def main(endpoint_url: Optional[str] = None, texto_objeto_novo_demo: Optional[st
     print(f"\n=== MODO 2 — Assistente de curadoria ===")
     print(f"Objeto novo (texto de entrada): \"{texto_demo}\"\n")
     sugestoes = sugerir_ligacoes_para_novo_objeto(
-        texto_demo, df, embeddings, modelo=modelo, top_k_por_dimensao=3, limiar=0.4,
+        texto_demo, df, embeddings, modelo=modelo, top_k_por_dimensao=3,
+        # limiar não é mais aplicado por padrão (None) — sempre mostra o
+        # top-k por dimensão, mesmo com score baixo. O corte, se quiser,
+        # é decisão da interface/leitura humana dos resultados, não do cálculo.
     )
     if sugestoes.empty:
-        print("Nenhuma sugestão acima do limiar — experimente baixar o parâmetro 'limiar'.")
+        print("Nenhuma entidade dimensional encontrada no acervo para nenhuma das 4 dimensões.")
     else:
         print(sugestoes.to_string(index=False))
 

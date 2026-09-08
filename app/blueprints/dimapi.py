@@ -46,7 +46,7 @@ def list():
 
         sparql_query = f'PREFIX : <{repo}#> ' + get_sparq_dim().replace('%keyword%', keyword).replace('%dimensoes%', dimensoes)
         
-        print('query',sparql_query) 
+        #print('query',sparql_query) 
         headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
                    'Accept': 'application/sparql-results+json,*/*;q=0.9',
                    'X-Requested-With': 'XMLHttpRequest'}

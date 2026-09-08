@@ -144,7 +144,14 @@ def sugerir():
         # de similaridade sempre, o que não é útil nem faz sentido).
         objeto_id_proprio = data.get('id', '') or ''
         top_k = int(data.get('top_k_por_dimensao', 3))
-        limiar = float(data.get('limiar', 0.4))
+        # 'limiar' agora é OPCIONAL e não filtra por padrão — a função
+        # sempre devolve o top-k por dimensão, mesmo com score baixo. Isso
+        # evita depender de um corte fixo que fica desatualizado a cada
+        # troca de modelo (a escala de similaridade muda entre modelos) ou
+        # conforme o acervo cresce. Filtragem visual (se quiser) fica a
+        # cargo do frontend, que já recebe o score de cada sugestão.
+        limiar_raw = data.get('limiar', None)
+        limiar = float(limiar_raw) if limiar_raw is not None else None
 
         texto_objeto = f"{titulo}. {descricao}".strip()
 

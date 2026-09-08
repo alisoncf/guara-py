@@ -1,3 +1,13 @@
 dimensao,propriedade_sugerida,objeto_uri,titulo,similaridade
 Evento,:oque,https://guara.ueg.br/fuseki/festas_populares#5011b203-5afa-4706-8ed3-60706312aa8c,Folia de São João,0.4045
+Evento,:oque,https://guara.ueg.br/fuseki/festas_populares#a4e249f5-6666-4d4e-933e-7989aff200d0,Congo vilaboense,0.398
+Evento,:oque,https://guara.ueg.br/fuseki/festas_populares#dd3c9984-80a2-43e2-ae48-7c2b4376d9ba,Romaria do Divino Pai Eterno em Trindade (GO,0.3809
 Lugar,:onde,https://guara.ueg.br/fuseki/festas_populares#9fc99cd1-ef40-4b66-b656-69b0fcbc17fe,Lagolândia,0.4834
+Lugar,:onde,https://guara.ueg.br/fuseki/festas_populares#f392c324-5aa8-4b77-a1eb-21761d40503b,Santo Antônio do Descoberto-GO,0.3471
+Lugar,:onde,https://guara.ueg.br/fuseki/festas_populares#f034f465-1cce-4a39-81d7-416b4625d66d,Trindade-GO,0.3431
+Pessoa,:quem,https://guara.ueg.br/fuseki/festas_populares#9314e235-efc9-4e0a-9d7e-c646c9619468,Benetida Gomes Cipriano,0.5053
+Pessoa,:quem,https://guara.ueg.br/fuseki/festas_populares#d73ba2aa-948f-42b7-bfa4-b61828e373cb,Adrielly Santos Ribeiro,0.436
+Pessoa,:quem,https://guara.ueg.br/fuseki/festas_populares#53be061e-f1ef-4594-b5d3-ca10d0decb76,Luana Nunes Martins,0.4009
+Tempo,:quando,https://guara.ueg.br/fuseki/festas_populares#91e241cf-952b-4109-80ac-af2adaeb6961,Útima sexta-feira do mês,0.2222
+Tempo,:quando,https://guara.ueg.br/fuseki/festas_populares#e46bcf8a-0a05-47c9-a7dc-48be926ba07a,Maio,0.1926
+Tempo,:quando,https://guara.ueg.br/fuseki/festas_populares#4b77e52c-9d14-4800-bd14-f88b5f1e1c5e,Século XX vinte,0.1889

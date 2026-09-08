@@ -6,6 +6,7 @@ from ..consultas import get_sparq_obj, get_prefix
 from ..config_loader import load_config
 from urllib.parse import urlencode
 from ..blueprints.auth import token_required
+from .sparql_escape import escapar_literal_sparql, escapar_id_sparql, validar_uri_sparql
 from flask import g
 objectapi_app = Blueprint('objectapi_app', __name__)
 
@@ -147,23 +148,23 @@ def create():
             return jsonify({"error": "Invalid input", "message": "Informe um nome/título"}), 400
         
         object_id = str(uuid.uuid4())
-        colecao = data['colecao'].split('#')[-1] 
-        
+        colecao = escapar_id_sparql(data['colecao'].split('#')[-1])
+
 
         objeto_uri = f":{object_id}"
         sparqapi_url = repo+'/'+load_config().get('update')
-        
-        
-        tem_relacao_part = f':temRelacao {", ".join(f"<{relacao}>" for relacao in data["temRelacao"])}' if "temRelacao" in data and data["temRelacao"] else ''
-        associated_media_part = f'schema:associatedMedia {", ".join(f"<{url}>" for url in data["associatedMedia"])}' if "associatedMedia" in data and data["associatedMedia"] else ''
+
+
+        tem_relacao_part = f':temRelacao {", ".join(f"<{validar_uri_sparql(relacao)}>" for relacao in data["temRelacao"])}' if "temRelacao" in data and data["temRelacao"] else ''
+        associated_media_part = f'schema:associatedMedia {", ".join(f"<{validar_uri_sparql(url)}>" for url in data["associatedMedia"])}' if "associatedMedia" in data and data["associatedMedia"] else ''
         colecao_part = f'obj:colecao :{colecao}' if "colecao" in data and data["colecao"] else ''
-        tipo_fisico_part = f'obj:tipoFisico {", ".join(f":{tipo}" for tipo in data["tipoFisicoAbreviado"])}' if "tipoFisicoAbreviado" in data and data["tipoFisicoAbreviado"] else ''
+        tipo_fisico_part = f'obj:tipoFisico {", ".join(f":{escapar_id_sparql(tipo)}" for tipo in data["tipoFisicoAbreviado"])}' if "tipoFisicoAbreviado" in data and data["tipoFisicoAbreviado"] else ''
 
         #print (tipo_fisico_part)
         # Montando a lista de partes da query
-        descricao = '"""' + data["descricao"].replace('"""', '\\"""') + '"""'
-        resumo = '"""' + data["resumo"].replace('"""', '\\"""') + '"""'
-        titulo = '"""' + data["titulo"].replace('"""', '\\"""') + '"""'
+        descricao = '"' + escapar_literal_sparql(data["descricao"]) + '"'
+        resumo = '"' + escapar_literal_sparql(data["resumo"]) + '"'
+        titulo = '"' + escapar_literal_sparql(data["titulo"]) + '"'
         parts = [
             f'dc:description {descricao}',
             f'dc:abstract {resumo}',
@@ -209,6 +210,9 @@ def create():
 
     except KeyError as e:
         return jsonify({"error3": "KeyError", "message": str(e)}), 400
+
+    except ValueError as e:
+        return jsonify({"error": "ValueError", "message": str(e)}), 400
 
     except Exception as e:
         return jsonify({"error4": "Exception", "message": str(e)}), 500
