@@ -1,5 +1,40 @@
+import unicodedata
 from app.config_loader import load_config
 def get_base(): return load_config().get('fuseki_url')
+
+
+def normalizar_acentos(texto):
+    """Remove acentos e caixa de um texto, para permitir comparação
+    insensível a acentuação (ex.: "aguas" deve casar com "águas")."""
+    if texto is None:
+        return ''
+    texto = str(texto).lower()
+    nfkd = unicodedata.normalize('NFKD', texto)
+    return ''.join(c for c in nfkd if not unicodedata.combining(c))
+
+
+# Mapa de acentos comuns do português, usado para montar uma cadeia de
+# REPLACE() em SPARQL que reproduz normalizar_acentos() do lado dos dados
+# já armazenados na triplestore (SPARQL não tem uma função pronta para
+# remover acentos, como o unicodedata do Python).
+_MAPA_ACENTOS_SPARQL = [
+    ('á', 'a'), ('à', 'a'), ('â', 'a'), ('ã', 'a'), ('ä', 'a'),
+    ('é', 'e'), ('è', 'e'), ('ê', 'e'), ('ë', 'e'),
+    ('í', 'i'), ('ì', 'i'), ('î', 'i'), ('ï', 'i'),
+    ('ó', 'o'), ('ò', 'o'), ('õ', 'o'), ('ô', 'o'), ('ö', 'o'),
+    ('ú', 'u'), ('ù', 'u'), ('û', 'u'), ('ü', 'u'),
+    ('ç', 'c'), ('ñ', 'n'),
+]
+
+
+def sparql_sem_acento(expressao):
+    """Envolve uma expressão SPARQL (ex.: 'STR(?titulo)') numa cadeia de
+    REPLACE() que remove os acentos comuns do português, para comparar com
+    um valor já normalizado por normalizar_acentos()."""
+    resultado = f'LCASE({expressao})'
+    for com_acento, sem_acento in _MAPA_ACENTOS_SPARQL:
+        resultado = f'REPLACE({resultado}, "{com_acento}", "{sem_acento}")'
+    return resultado
 def get_prefix():
     return """ PREFIX rdf:<http://www.w3.org/1999/02/22-rdf-syntax-ns#>
     PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
@@ -14,21 +49,27 @@ def get_prefix():
 
 
 def get_sparq_dim():
-    return get_prefix() + """
-    SELECT DISTINCT ?obj ?titulo ?resumo ?descricao ?dimensao ?lat ?lon ?colecao
-    WHERE {
+    return get_prefix() + f"""
+    SELECT DISTINCT ?obj ?titulo ?resumo ?descricao ?dimensao ?lat ?lon
+        (GROUP_CONCAT(DISTINCT ?colecao; SEPARATOR=", ") AS ?colecoes)
+    WHERE {{
         ?obj a ?dimensao .
         FILTER (?dimensao IN (%dimensoes%)).
         ?obj dc:title ?titulo.
         ?obj dc:abstract ?resumo.
-        OPTIONAL { ?obj dc:description ?descricao . }
-        OPTIONAL { ?obj obj:tipoFisico ?tipo. }
-        OPTIONAL { ?obj obj:colecao ?colecao. }
-        OPTIONAL { ?obj geo:lat ?lat. }
-        OPTIONAL { ?obj geo:lon ?lon. }
-        FILTER (regex(?obj, '%keyword%', 'i') || regex(?titulo, '%keyword%', 'i') || regex(?resumo, '%keyword%', 'i'))
-    }
-    GROUP BY ?obj ?titulo ?resumo ?colecao ?descricao ?dimensao ?lat ?lon
+        OPTIONAL {{ ?obj dc:description ?descricao . }}
+        OPTIONAL {{ ?obj obj:tipoFisico ?tipo. }}
+        OPTIONAL {{ ?obj obj:colecao ?colecao. }}
+        OPTIONAL {{ ?obj geo:lat ?lat. }}
+        OPTIONAL {{ ?obj geo:lon ?lon. }}
+        FILTER (
+            CONTAINS({sparql_sem_acento('STR(?obj)')}, %keyword_normalizado%) ||
+            CONTAINS({sparql_sem_acento('STR(?titulo)')}, %keyword_normalizado%) ||
+            CONTAINS({sparql_sem_acento('STR(?resumo)')}, %keyword_normalizado%) ||
+            CONTAINS({sparql_sem_acento('STR(?descricao)')}, %keyword_normalizado%)
+        )
+    }}
+    GROUP BY ?obj ?titulo ?resumo ?descricao ?dimensao ?lat ?lon
     ORDER BY ?dimensao ?titulo
             """
 def get_sparq_all():

@@ -188,7 +188,7 @@ def create():
             }}
         """
 
-        print('->', sparql_query)  # Debugging
+        #print('->', sparql_query)  # Debugging
         # Enviar a query SPARQL para o endpoint de atualização
         headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
                    'Accept': 'application/sparql-results+json,*/*;q=0.9',

@@ -2,10 +2,11 @@ from flask import Blueprint, request, jsonify,current_app
 import requests, os
 import uuid
 # Importe suas funções corretamente
-from ..consultas import get_sparq_all,get_sparq_dim, get_prefix
+from ..consultas import get_sparq_all,get_sparq_dim, get_prefix, normalizar_acentos
 from ..config_loader import load_config
 from urllib.parse import urlencode
 from ..blueprints.auth import token_required
+from .sparql_escape import escapar_literal_sparql
 dimapi_app = Blueprint('dimapi_app', __name__)
 
 DIMENSOES_VALIDAS = {
@@ -44,7 +45,8 @@ def list():
         prefix_base = repo  + "#"
         sparqapi_url = repo
 
-        sparql_query = f'PREFIX : <{repo}#> ' + get_sparq_dim().replace('%keyword%', keyword).replace('%dimensoes%', dimensoes)
+        keyword_normalizado = f'"{escapar_literal_sparql(normalizar_acentos(keyword))}"'
+        sparql_query = f'PREFIX : <{repo}#> ' + get_sparq_dim().replace('%keyword_normalizado%', keyword_normalizado).replace('%dimensoes%', dimensoes)
         
         #print('query',sparql_query) 
         headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
@@ -111,7 +113,7 @@ def list_all():
         except Exception as e:
             print('eero',e)
 
-        print('query',sparql_query) 
+        #print('query',sparql_query) 
         headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
                    'Accept': 'application/sparql-results+json,*/*;q=0.9',
                    'X-Requested-With': 'XMLHttpRequest'}
