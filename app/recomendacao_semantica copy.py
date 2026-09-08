@@ -448,11 +448,6 @@ def avaliar_contra_curadoria(recomendacoes: pd.DataFrame,
     curatoriais reais. É uma métrica de recall, não de precisão; a precisão
     (quantas das sugestões extras fazem sentido) precisa da rodada de
     avaliação humana qualitativa.
-
-    MANTIDA por compatibilidade — para avaliação completa, com recall em
-    vários cortes de k e rank exato de cada relação, usar
-    avaliar_recall_e_mrr() abaixo, que não depende de escolher um k fixo
-    de antemão.
     """
     pares_curados = set(
         zip(relacoes_existentes["objeto_uri"], relacoes_existentes["alvo_uri"])
@@ -471,90 +466,6 @@ def avaliar_contra_curadoria(recomendacoes: pd.DataFrame,
         "recall_at_k": round(recall, 4),
         "k": k,
     }
-
-
-def avaliar_recall_e_mrr(
-    df: pd.DataFrame,
-    matriz_sim: np.ndarray,
-    relacoes_existentes: pd.DataFrame,
-    ks: tuple = (1, 3, 5, 10),
-) -> tuple[dict, pd.DataFrame]:
-    """Avaliação completa, sem depender de um k fixo escolhido a priori.
-
-    Para cada relação curada manualmente (origem -> alvo), calcula a
-    POSIÇÃO EXATA (rank, 1-indexado) do alvo dentro do ranking completo de
-    similaridade da origem contra todos os outros objetos do acervo — não
-    só dentro de um top-k truncado. A partir desses ranks, deriva:
-
-      - recall@k para cada k em `ks`: fração de relações cujo rank <= k.
-      - MRR (Mean Reciprocal Rank): média de 1/rank sobre todas as relações
-        (relações cujo alvo não foi encontrado no acervo contam como 0,
-        equivalente a rank infinito) — métrica única, sem escolha de k,
-        que resume "o quão perto do topo" o modelo coloca a resposta certa
-        em média. MRR mais alto = respostas certas mais perto do topo.
-
-    Retorna (resumo: dict, detalhe: DataFrame) — o DataFrame de detalhe
-    tem uma linha por relação curada, com o rank exato encontrado, pronta
-    para inspeção qualitativa (evita ter que cruzar manualmente a lista de
-    relações curadas com o CSV de recomendações, como foi feito à mão em
-    rodadas anteriores desta pesquisa).
-    """
-    uri_para_indice = {uri: i for i, uri in enumerate(df["objeto_uri"])}
-    n = len(df)
-
-    linhas_detalhe = []
-    for _, rel in relacoes_existentes.iterrows():
-        origem_uri = rel["objeto_uri"]
-        alvo_uri = rel["alvo_uri"]
-        propriedade = rel["propriedade"]
-
-        i = uri_para_indice.get(origem_uri)
-        j = uri_para_indice.get(alvo_uri)
-
-        titulo_origem = df.iloc[i]["titulo"] if i is not None else "(objeto não encontrado no acervo)"
-        titulo_alvo = df.iloc[j]["titulo"] if j is not None else "(objeto não encontrado no acervo)"
-
-        if i is None or j is None:
-            # Referência quebrada: origem ou alvo não existe no acervo
-            # carregado. Rank indefinido (tratado como infinito para fins
-            # de MRR/recall — nunca conta como acerto, em nenhum k).
-            linhas_detalhe.append({
-                "propriedade": propriedade, "titulo_origem": titulo_origem,
-                "titulo_alvo": titulo_alvo, "rank": None,
-                "similaridade": None, "status": "referência quebrada",
-            })
-            continue
-
-        sims = matriz_sim[i].copy()
-        sims[i] = -np.inf  # exclui a própria origem da comparação consigo mesma
-        ranking = np.argsort(-sims)  # índices ordenados por similaridade decrescente
-        rank = int(np.where(ranking == j)[0][0]) + 1  # 1-indexado
-
-        linhas_detalhe.append({
-            "propriedade": propriedade, "titulo_origem": titulo_origem,
-            "titulo_alvo": titulo_alvo, "rank": rank,
-            "similaridade": round(float(matriz_sim[i, j]), 4),
-            "status": "ok",
-        })
-
-    detalhe = pd.DataFrame(linhas_detalhe)
-    ranks_validos = detalhe["rank"].dropna()
-
-    resumo = {"total_relacoes_curadas": len(detalhe)}
-    for k in ks:
-        acertos_k = int((ranks_validos <= k).sum())
-        resumo[f"recall_at_{k}"] = round(acertos_k / len(detalhe), 4) if len(detalhe) else float("nan")
-        resumo[f"acertos_at_{k}"] = acertos_k
-
-    reciprocos = (1.0 / ranks_validos) if len(ranks_validos) else pd.Series(dtype=float)
-    # Relações com referência quebrada contam como 0 no MRR (rank infinito)
-    soma_reciprocos = reciprocos.sum()
-    resumo["mrr"] = round(soma_reciprocos / len(detalhe), 4) if len(detalhe) else float("nan")
-    resumo["rank_medio_dos_encontrados"] = (
-        round(float(ranks_validos.mean()), 2) if len(ranks_validos) else float("nan")
-    )
-
-    return resumo, detalhe
 
 
 # ---------------------------------------------------------------------------
@@ -585,13 +496,9 @@ def main(endpoint_url: Optional[str] = None, texto_objeto_novo_demo: Optional[st
     print(recomendacoes.to_string(index=False))
 
     if not relacoes.empty:
-        resumo_avaliacao, detalhe_avaliacao = avaliar_recall_e_mrr(
-            df, matriz_sim, relacoes, ks=(1, 3, 5, 10)
-        )
-        print("\n=== Avaliação contra relações curadas manualmente (recall@k + MRR) ===")
-        print(json.dumps(resumo_avaliacao, ensure_ascii=False, indent=2))
-        print("\n--- Detalhe por relação (rank exato de cada uma) ---")
-        print(detalhe_avaliacao.to_string(index=False))
+        avaliacao = avaliar_contra_curadoria(recomendacoes, relacoes, k=3)
+        print("\n=== Avaliação contra relações curadas manualmente ===")
+        print(json.dumps(avaliacao, ensure_ascii=False, indent=2))
 
     # --- Modo 2: assistente de curadoria (objeto novo -> sugestões por dimensão) ---
     # Exemplo de demonstração: um documento novo, ainda sem nenhuma relação
@@ -625,11 +532,6 @@ def main(endpoint_url: Optional[str] = None, texto_objeto_novo_demo: Optional[st
     sugestoes.to_csv(caminho_sugestoes, index=False)
     print(f"\nRecomendações salvas em {caminho_recs}")
     print(f"Sugestões do assistente de curadoria salvas em {caminho_sugestoes}")
-
-    if not relacoes.empty:
-        caminho_avaliacao = Path("avaliacao_detalhada.csv").resolve()
-        detalhe_avaliacao.to_csv(caminho_avaliacao, index=False)
-        print(f"Detalhe da avaliação (rank por relação) salvo em {caminho_avaliacao}")
 
 
 if __name__ == "__main__":
