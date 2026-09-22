@@ -87,11 +87,11 @@ def create():
         prefix_base = load_config().get('prefix_base_repo')
         repo_uri=prefix_base+data['uri']
         sparqapi_url = load_config().get('class_update_url')
-        
+        namespace_repo = "https://guara.ueg.br/fuseki"
         # Montagem da query SPARQL de inserção
         sparql_query = f"""
             prefix :      <{repo_uri}#> 
-            prefix rpa:   <http://200.137.241.247:8080/fuseki/repositorios#> 
+            prefix rpa:   <{namespace_repo}/repositorios#> 
             prefix rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#> 
             prefix owl:   <http://www.w3.org/2002/07/owl#> 
             prefix xsd:   <http://www.w3.org/2001/XMLSchema#> 
