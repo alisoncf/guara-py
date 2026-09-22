@@ -7,6 +7,7 @@ from ..consultas import get_sparq_all,get_sparq_dim, get_prefix
 from ..config_loader import load_config
 from urllib.parse import urlencode
 from ..blueprints.auth import token_required
+from app.fuseki_utils import resolve_fuseki_endpoint
 import logging
 import warnings
 
@@ -32,7 +33,7 @@ def list():
         type = data['type']
         
         prefix_base = repo  + "#"
-        sparqapi_url = repo
+        sparqapi_url = resolve_fuseki_endpoint( repo)
         
         sparql_query = get_prefix() + f"""
                 SELECT ?id ?propriedade ?valor ?direcao
@@ -117,7 +118,7 @@ def add():
         else:
             valor_seguro = escapar_literal_sparql(valor)
             value = f'"{valor_seguro}"'
-        sparqapi_url = repo
+        sparqapi_url = resolve_fuseki_endpoint( repo)
                 # Construção final da query SPARQL
         sparql_query = f"""{get_prefix()+ ' '+  prefixo}
             PREFIX : <{repo}#>
@@ -166,7 +167,7 @@ def remove():
         objeto_id = data["id"]
         #print(objeto_id)
         objeto_uri = f":{objeto_id}"
-        sparqapi_url = f"{repo}/{load_config().get('update')}"
+        sparqapi_url = f"{resolve_fuseki_endpoint( repo)}/{load_config().get('update')}"
         
         sparql_query = f"""{get_prefix()}
             PREFIX : <{repo}#>
@@ -217,7 +218,7 @@ def remover_relacao():
         o = data["o"]
         
         
-        sparqapi_url = f"{repo}/{load_config().get('update')}"
+        sparqapi_url = f"{resolve_fuseki_endpoint( repo)}/{load_config().get('update')}"
         
         sparql_query = f"""{get_prefix()}
             PREFIX : <{repo}#>
@@ -273,7 +274,7 @@ def update():
         titulo=data['titulo']
         object_id = data['id']
         objeto_uri = f":{object_id}"
-        sparqapi_url = repo+'/'+load_config().get('update')
+        sparqapi_url = resolve_fuseki_endpoint( repo)+'/'+load_config().get('update')
         description_seguro = escapar_literal_sparql(description)
         subject_seguro = escapar_literal_sparql(subject)
         titulo_seguro = escapar_literal_sparql(titulo)
@@ -329,7 +330,7 @@ def add_relation():
         midia = data["midia_uri"]
         propriedade = data["propriedade"]
         repo = data['repository']
-        sparqapi_url = repo+'/'+load_config().get('update')
+        sparqapi_url = resolve_fuseki_endpoint( repo)+'/'+load_config().get('update')
         sparql_query = f"""{get_prefix()}
         PREFIX : <{repo}#>
         INSERT DATA {{

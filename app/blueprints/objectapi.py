@@ -8,6 +8,7 @@ from urllib.parse import urlencode
 from ..blueprints.auth import token_required
 from .sparql_escape import escapar_literal_sparql, escapar_id_sparql, validar_uri_sparql
 from flask import g
+from app.fuseki_utils import resolve_fuseki_endpoint
 objectapi_app = Blueprint('objectapi_app', __name__)
 
 
@@ -26,11 +27,11 @@ def list():
         repo = data['repository']
         
         prefix_base = repo  + "#"
-        sparqapi_url = repo
+        sparqapi_url = resolve_fuseki_endpoint(repo)
         
-        sparql_query = f'PREFIX : <{repo}#> ' + get_sparq_obj().replace('%keyword%', keyword)
+        sparql_query = f'PREFIX : <{ repo}#> ' + get_sparq_obj().replace('%keyword%', keyword)
         
-        print('q',sparql_query);
+        #print('q',sparql_query);
         headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
                    'Accept': 'application/sparql-results+json,*/*;q=0.9',
                    'X-Requested-With': 'XMLHttpRequest'}
@@ -95,7 +96,7 @@ def listar_arquivos():
         data = {'query': sparql_query}
         encoded_data = urlencode(data)
 
-        response = requests.post(repo, headers=headers, data=encoded_data)
+        response = requests.post(resolve_fuseki_endpoint( repo), headers=headers, data=encoded_data)
 
         if response.status_code == 200:
             sparql_result = response.json()
@@ -152,7 +153,7 @@ def create():
 
 
         objeto_uri = f":{object_id}"
-        sparqapi_url = repo+'/'+load_config().get('update')
+        sparqapi_url = resolve_fuseki_endpoint( repo)+'/'+load_config().get('update')
 
 
         tem_relacao_part = f':temRelacao {", ".join(f"<{validar_uri_sparql(relacao)}>" for relacao in data["temRelacao"])}' if "temRelacao" in data and data["temRelacao"] else ''
@@ -232,7 +233,7 @@ def excluir_objeto_fisico():
         objeto_id = data["id"]
         
         objeto_uri = f":{objeto_id}"
-        sparqapi_url = f"{repo}/{load_config().get('update')}"
+        sparqapi_url = f"{resolve_fuseki_endpoint( repo)}/{load_config().get('update')}"
         
         sparql_query = f"""{get_prefix()}
             PREFIX : <{repo}#>
@@ -283,7 +284,7 @@ def remover_relacao():
         o = data["o"]
         
         
-        sparqapi_url = f"{repo}/{load_config().get('update')}"
+        sparqapi_url = f"{resolve_fuseki_endpoint( repo)}/{load_config().get('update')}"
         
         sparql_query = f"""{get_prefix()}
             PREFIX : <{repo}#>
@@ -337,7 +338,7 @@ def update():
         objeto_uri = f":{object_id}"
         colecao = data['colecao'].split('#')[-1] 
         
-        sparqapi_url = repo + '/' + load_config().get('update')
+        sparqapi_url = resolve_fuseki_endpoint( repo) + '/' + load_config().get('update')
                 
         
         tipo_fisico_part = f'obj:tipoFisico {", ".join(f"obj:{tipo}" for tipo in data["tipoFisicoAbreviado"])}' if "tipoFisicoAbreviado" in data and data["tipoFisicoAbreviado"] else ''
@@ -423,7 +424,7 @@ def add_relation(objeto_uri, repositorio_uri, midia_uri, propriedade, repository
         midia = midia_uri
         propriedade = propriedade
         repo = repository
-        sparqapi_url = repo+'/'+load_config().get('update')
+        sparqapi_url = resolve_fuseki_endpoint( repo)+'/'+load_config().get('update')
         sparql_query = f"""{get_prefix()}
         PREFIX : <{repo}#>
         INSERT DATA {{

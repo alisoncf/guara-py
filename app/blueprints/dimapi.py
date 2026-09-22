@@ -7,6 +7,7 @@ from ..config_loader import load_config
 from urllib.parse import urlencode
 from ..blueprints.auth import token_required
 from .sparql_escape import escapar_literal_sparql
+from app.fuseki_utils import resolve_fuseki_endpoint
 dimapi_app = Blueprint('dimapi_app', __name__)
 
 DIMENSOES_VALIDAS = {
@@ -43,7 +44,7 @@ def list():
             dimensoes = ', '.join(DIMENSOES_VALIDAS.values())
 
         prefix_base = repo  + "#"
-        sparqapi_url = repo
+        sparqapi_url = resolve_fuseki_endpoint( repo)
 
         keyword_normalizado = f'"{escapar_literal_sparql(normalizar_acentos(keyword))}"'
         sparql_query = f'PREFIX : <{repo}#> ' + get_sparq_dim().replace('%keyword_normalizado%', keyword_normalizado).replace('%dimensoes%', dimensoes)
@@ -94,7 +95,7 @@ def list_all():
         
 
         prefix_base = repo  + "#"
-        sparqapi_url = repo
+        sparqapi_url = resolve_fuseki_endpoint( repo)
         replace_tipo = {
             'quem': 'a obj:Pessoa;',
             'quando': 'a obj:Tempo;',
@@ -178,7 +179,7 @@ def listar_arquivos():
         data = {'query': sparql_query}
         encoded_data = urlencode(data)
 
-        response = requests.post(repo, headers=headers, data=encoded_data)
+        response = requests.post(resolve_fuseki_endpoint( repo), headers=headers, data=encoded_data)
 
         if response.status_code == 200:
             sparql_result = response.json()
@@ -240,7 +241,7 @@ def create():
             lon = lon.strip()
             coord = f'geo:lat "{lat}";geo:lon "{lon}";'
             
-        sparqapi_url = repo+'/'+load_config().get('update')
+        sparqapi_url = resolve_fuseki_endpoint( repo)+'/'+load_config().get('update')
        
         
             
@@ -316,7 +317,7 @@ def excluir():
         objeto_id = data["id"]
         #print(objeto_id)
         objeto_uri = f":{objeto_id}"
-        sparqapi_url = f"{repo}/{load_config().get('update')}"
+        sparqapi_url = f"{resolve_fuseki_endpoint( repo)}/{load_config().get('update')}"
         
         sparql_query = f"""{get_prefix()}
             PREFIX : <{repo}#>
@@ -367,7 +368,7 @@ def remover_relacao():
         o = data["s"]
         
         
-        sparqapi_url = f"{repo}/{load_config().get('update')}"
+        sparqapi_url = f"{resolve_fuseki_endpoint( repo)}/{load_config().get('update')}"
         
         sparql_query = f"""{get_prefix()}
             PREFIX : <{repo}#>
@@ -422,7 +423,7 @@ def update():
         titulo = data['titulo']
         object_id = data['id']
         objeto_uri = f":{object_id}"
-        sparqapi_url = repo + '/' + load_config().get('update')
+        sparqapi_url = resolve_fuseki_endpoint( repo) + '/' + load_config().get('update')
         coordenadas = data.get('coordenadas', None)
 
         # Começa a construir o bloco SPARQL
@@ -525,7 +526,7 @@ def update_old():
         titulo=data['titulo']
         object_id = data['id']
         objeto_uri = f":{object_id}"
-        sparqapi_url = repo+'/'+load_config().get('update')
+        sparqapi_url = resolve_fuseki_endpoint( repo)+'/'+load_config().get('update')
         coordenadas = data['coordenadas']
         
 
@@ -579,7 +580,7 @@ def add_relation():
         midia = data["midia_uri"]
         propriedade = data["propriedade"]
         repo = data['repository']
-        sparqapi_url = repo+'/'+load_config().get('update')
+        sparqapi_url = resolve_fuseki_endpoint( repo)+'/'+load_config().get('update')
         sparql_query = f"""{get_prefix()}
         PREFIX : <{repo}#>
         INSERT DATA {{

@@ -7,6 +7,7 @@ from ..config_loader import load_config
 from urllib.parse import urlencode
 from ..blueprints.auth import token_required
 from flask import g
+from app.fuseki_utils import resolve_fuseki_endpoint
 midiaapi_app = Blueprint('midiaapi_app', __name__)
 
 
@@ -47,7 +48,7 @@ def listar_arquivos():
         data = {'query': sparql_query}
         encoded_data = urlencode(data)
 
-        response = requests.post(repo, headers=headers, data=encoded_data)
+        response = requests.post(resolve_fuseki_endpoint( repo), headers=headers, data=encoded_data)
 
         if response.status_code == 200:
             sparql_result = response.json()
@@ -91,14 +92,14 @@ def add_relation(objeto_uri, repositorio_uri, target_uri, propriedade, repositor
         target = target_uri
         propriedade = propriedade
         repo = repository
-        sparqapi_url = repo+'/'+load_config().get('update')
+        sparqapi_url = resolve_fuseki_endpoint( repo)+'/'+load_config().get('update')
         sparql_query = f"""{get_prefix()}
         PREFIX : <{repo}#>
         INSERT DATA {{
         {objeto} {propriedade} {target} .
         }}
         """
-        print('add relação:',sparql_query, ' no repositório ', sparqapi_url)
+        #print('add relação:',sparql_query, ' no repositório ', sparqapi_url)
         headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
                    'Accept': 'application/sparql-results+json,*/*;q=0.9',
                    'X-Requested-With': 'XMLHttpRequest'}

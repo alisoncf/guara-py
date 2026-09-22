@@ -39,6 +39,7 @@ from ..recomendacao_semantica import (
 
 import requests
 from urllib.parse import urlencode
+from app.fuseki_utils import resolve_fuseki_endpoint
 
 logger = logging.getLogger(__name__)
 recomendacao_app = Blueprint('recomendacao_app', __name__)
@@ -94,7 +95,7 @@ def _extrair_acervo_dimensional(repo: str) -> pd.DataFrame:
         'X-Requested-With': 'XMLHttpRequest',
     }
     encoded = urlencode({'query': sparql_query})
-    response = requests.post(repo, headers=headers, data=encoded)
+    response = requests.post(resolve_fuseki_endpoint( repo), headers=headers, data=encoded)
     response.raise_for_status()
     resultado = response.json()
 

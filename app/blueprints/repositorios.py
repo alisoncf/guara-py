@@ -38,7 +38,7 @@ def list():
     try:
         nome = request.args.get('name', default=None, type=str)
         filtro = f'FILTER(?nome = "{nome}"^^xsd:string)' if nome else ''
-        sparqapi_url = load_config().get('repo_query_url')
+        sparqapi_url =  load_config().get('repo_query_url')
         #print('url:',sparqapi_url)
         sparql_query = get_sparq_repo().replace("%filter%", filtro)
                         

@@ -3,6 +3,7 @@ import requests
 from ..consultas import get_sparq_class, get_prefix
 from ..config_loader import load_config
 from urllib.parse import urlencode
+from app.fuseki_utils import resolve_fuseki_endpoint
 
 classapi_app = Blueprint('classapi_app', __name__)
 
@@ -28,7 +29,8 @@ def list():
         keyword = data['keyword']
         repo = data['repository']
         #sparqapi_url = load_config().get('class_query_url')
-        sparqapi_url = repo
+        #sparqapi_url = repo
+        sparqapi_url = resolve_fuseki_endpoint(repo)
 
         sparql_query = get_sparq_class().replace(
             '%keyword%', keyword).replace('%orderby%', orderby)
@@ -81,7 +83,7 @@ def adicionar_classe():
         
         prefix_base = repo+"#"
         class_uri =':'+nome_classe
-        sparqapi_url = repo
+        sparqapi_url = resolve_fuseki_endpoint( repo)
 
         comment = data['comment'].replace('"""', '\\"""')  # evita quebra de string SPARQL
 
@@ -100,7 +102,7 @@ def adicionar_classe():
                                 rdfs:subClassOf :{mae} .
             }}
         """
-        print(sparql_query)
+        #print(sparql_query)
 
         # Preparação dos headers e dados para a requisição POST
         headers = {
@@ -144,7 +146,7 @@ def alterar_classe():
         nome_classe = data['label'].replace(" ", "_")
         prefix_base = repo  + "#"
         class_uri = f":{nome_classe}"
-        sparqapi_url = repo
+        sparqapi_url = resolve_fuseki_endpoint( repo)
 
         mae = data['subclassof']
         
@@ -211,7 +213,7 @@ def excluir_classe():
                 return jsonify({"error": "Invalid input", "message": f"Expected JSON with '{field}' field"}), 400
 
         class_uri = data['label']
-        repo = data['repository']
+        repo = resolve_fuseki_endpoint( data['repository'])
         if verificar_existencia_classe(class_uri,repo):
             return jsonify({"error": "Classe não pode ser excluída", "message": "Existem registros relacionados a essa classe"}), 400
 
