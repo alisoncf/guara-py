@@ -52,13 +52,15 @@ def create_app():
     app.register_blueprint(iaapi_app, url_prefix='/ia')
     app.register_blueprint(recomendacao_app, url_prefix='/recomendacao')
 
+    
     # Ambiente
     environment = os.getenv('FLASK_ENV', 'production')
-    if environment != 'development':
+    cert_path = os.getenv('SSL_CERT_PATH', 'C:/home/certificado/cert.pem')
+    key_path = os.getenv('SSL_KEY_PATH', 'C:/home/certificado/key.pem')
+    if environment != 'development' and os.path.exists(cert_path) and os.path.exists(key_path):
         requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-        context.load_cert_chain('C:/home/certificado/cert.pem',
-                                'C:/home/certificado/key.pem')
+        context.load_cert_chain(cert_path, key_path)
         app.config['SSL_CONTEXT'] = context
 
     return app
