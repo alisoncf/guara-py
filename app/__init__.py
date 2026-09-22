@@ -27,6 +27,7 @@ def create_app():
     CORS(app, resources={r"/*": {"origins": [
         "https://localhost:9000", "http://localhost:9000",
         "https://localhost:8080", "http://localhost:8080",
+        "https://guara.ueg.br",
     ]}})
 
     app.config['UPLOAD_FOLDER'] = '/var/www/imagens'
@@ -53,6 +54,12 @@ def create_app():
     app.register_blueprint(recomendacao_app, url_prefix='/recomendacao')
 
     
+    
+
+    @app.route('/')
+    def health_check():
+        return {'status': 'ok', 'service': 'guara-py'}, 200
+
     # Ambiente
     environment = os.getenv('FLASK_ENV', 'production')
     cert_path = os.getenv('SSL_CERT_PATH', 'C:/home/certificado/cert.pem')

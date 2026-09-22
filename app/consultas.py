@@ -150,11 +150,16 @@ def get_sparq_class():
 
 
 def get_sparq_repo():
-    base = get_base()
-    prefixos = get_prefix()  # já vem formatado se você corrigiu como na resposta anterior
+    # Namespace RDF dos dados de repositórios: precisa bater com o valor
+    # usado quando os dados foram inseridos no Fuseki, e é FIXO -
+    # independente de onde o backend está rodando (host.docker.internal
+    # em produção, localhost em dev, etc.). Diferente de FUSEKI_BASE_URL
+    # (get_base()), que é só o endereço HTTP usado para CONECTAR no Fuseki.
+    namespace_repo = "https://guara.ueg.br/fuseki"
+    prefixos = get_prefix()
     consulta = f"""
-      PREFIX :     <{base}/repositoriosamigos#> 
-      PREFIX rpa:  <{base}/repositorios#> 
+      PREFIX :     <{namespace_repo}/repositoriosamigos#> 
+      PREFIX rpa:  <{namespace_repo}/repositorios#> 
       PREFIX rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> 
       PREFIX owl:  <http://www.w3.org/2002/07/owl#> 
       PREFIX xsd:  <http://www.w3.org/2001/XMLSchema#> 
@@ -172,5 +177,4 @@ def get_sparq_repo():
     retorno = prefixos + "\n" + consulta
     print('retorno', retorno)
     return retorno
-
     
