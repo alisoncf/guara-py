@@ -17,8 +17,9 @@ services:
     environment:
       FLASK_ENV: development
       PYTHONUNBUFFERED: "1"
-      FUSEKI_BASE_URL: https://guara.ueg.br/fuseki
-    
+      # FUSEKI_BASE_URL não é fixado aqui de propósito: o endereço certo
+      # depende de onde o Fuseki de cada dev está rodando. Defina no seu
+      # docker-compose.override.yml local (não versionado) ou no .env.
     restart: unless-stopped
 
   
