@@ -233,7 +233,7 @@ def create():
         object_id = str(uuid.uuid4())
         objeto_uri = f":{object_id}"
 
-        coordenadas = data['coordenadas']
+        coordenadas = data.get('coordenadas')
         coord=''
         if coordenadas:
             lat, lon = coordenadas.split(',')

@@ -1,3 +1,4 @@
+import re
 import unicodedata
 from app.config_loader import load_config
 def get_base(): return load_config().get('fuseki_url')
@@ -11,6 +12,14 @@ def normalizar_acentos(texto):
     texto = str(texto).lower()
     nfkd = unicodedata.normalize('NFKD', texto)
     return ''.join(c for c in nfkd if not unicodedata.combining(c))
+
+
+def slugificar(texto):
+    """Converte um texto livre (ex.: nome digitado pelo usuário, com
+    espaços/acentos) num slug seguro para usar como segmento de URI/nome
+    de pasta (ex.: "Museu Pedro Ludovico" -> "museu_pedro_ludovico")."""
+    slug = re.sub(r'[^a-z0-9]+', '_', normalizar_acentos(texto)).strip('_')
+    return slug or 'repo'
 
 
 # Mapa de acentos comuns do português, usado para montar uma cadeia de
@@ -165,13 +174,14 @@ def get_sparq_repo():
       PREFIX xsd:  <http://www.w3.org/2001/XMLSchema#> 
       PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#> 
 
-      SELECT ?nome ?uri ?contato ?descricao ?responsavel
+      SELECT ?nome ?uri ?contato ?descricao ?responsavel ?avatar
       WHERE {{
         ?repo rpa:uri ?uri.
         ?repo rpa:nome ?nome.
         OPTIONAL {{ ?repo rpa:contato ?contato. }}
         OPTIONAL {{ ?repo rpa:descricao ?descricao. }}
         OPTIONAL {{ ?repo rpa:responsavel ?responsavel. }}
+        OPTIONAL {{ ?repo rpa:avatar ?avatar. }}
       }} ORDER BY ?nome
       """
     retorno = prefixos + "\n" + consulta

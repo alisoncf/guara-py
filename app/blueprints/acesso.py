@@ -6,6 +6,8 @@ from datetime import datetime, timedelta
 from urllib.parse import urlencode
 from werkzeug.security import generate_password_hash, check_password_hash
 from ..blueprints.repositorios import obter_repositorio_por_nome
+from ..blueprints.auth import token_required
+from ..consultas import slugificar
 from ..config_loader import load_config
 acessoapp = Blueprint('acessoapp', __name__)
 
@@ -134,21 +136,44 @@ def login():
 
 
 @acessoapp.route('/add_user', methods=['POST'])
+@token_required
 def add_curador():
     data = request.json
+    required_fields = ['username', 'password', 'permissao', 'email', 'repo']
+    for field in required_fields:
+        if not data.get(field):
+            return jsonify({'message': f"Campo '{field}' é obrigatório"}), 400
+
     username = data.get('username')
     password = data.get('password')
     permissao = data.get('permissao')
+    email = data.get('email')
+    repo = data.get('repo')
 
+    # 'repo' pode vir como string única ("festas_populares") ou lista
+    # (["festas_populares", "diocese"]) - vira a mesma string separada
+    # por vírgula que o login já espera em :repo.
+    if isinstance(repo, list):
+        repo = ','.join(repo)
+
+    # username vira o segmento de URI local (:{username_uri}) sem aspas -
+    # precisa ser um slug seguro (nem todo caractere válido num username
+    # digitado pelo usuário é válido ali, ex.: "@" quebra a query, sendo
+    # interpretado como início de LANGTAG). O texto original continua
+    # gravado tal como digitado no campo :username (entre aspas).
+    username_uri = slugificar(username)
     password_hash = generate_password_hash(password)
 
     update = f"""
+    PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
     PREFIX foaf: <http://xmlns.com/foaf/0.1/>
     PREFIX : <https://guara.ueg.br/fuseki/usuarios#>
     INSERT DATA {{
-        :{username} rdf:type :Curador ;
+        :{username_uri} rdf:type :Curador ;
                    :username "{sparql_escape(username)}" ;
+                   foaf:mbox "{sparql_escape(email)}" ;
                    foaf:password "{sparql_escape(password_hash)}" ;
+                   :repo "{sparql_escape(repo)}" ;
                    :temPermissao "{sparql_escape(permissao)}" .
     }}
     """
@@ -156,4 +181,4 @@ def add_curador():
     if response.status_code == 200:
         return jsonify({'message': 'Curador added successfully'}), 201
     else:
-        return jsonify({'message': 'Failed to add curador'}), 500
+        return jsonify({'message': 'Failed to add curador', 'detalhe': response.text}), 500

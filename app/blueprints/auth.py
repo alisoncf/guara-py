@@ -1,23 +1,29 @@
-import os
 from functools import wraps
 from flask import request, jsonify
 from datetime import datetime
-from ..blueprints.acesso import execute_sparql_query  # ou onde estiver
 from flask import g
 
-FUSEKI_BASE_URL = os.getenv('FUSEKI_BASE_URL', 'http://localhost:3030')
+# Namespace RDF dos dados de usuário: precisa bater com o valor usado
+# quando os dados foram inseridos no Fuseki (ver acesso.py), e é FIXO -
+# não deve ser confundido com FUSEKI_BASE_URL (o endereço usado para
+# CONECTAR no Fuseki, que varia por ambiente).
+NAMESPACE_USUARIOS = "https://guara.ueg.br/fuseki/usuarios"
 
 
 def token_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
+        # Import tardio para evitar ciclo de import: acesso.py importa
+        # repositorios.py, que importa token_required deste módulo.
+        from ..blueprints.acesso import execute_sparql_query
+
         token = request.headers.get('Authorization')
         if not token:
             return jsonify({'message': 'Token não fornecido'}), 401
 
         token = token.replace('Bearer ', '')
         query = f"""
-        PREFIX : <{FUSEKI_BASE_URL}/usuarios#>
+        PREFIX : <{NAMESPACE_USUARIOS}#>
         SELECT ?user ?validade  (GROUP_CONCAT(?permissao; separator=", ") AS ?permissoes)
             WHERE {{
                 ?user :token "{token}" ;
