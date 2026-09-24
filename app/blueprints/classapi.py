@@ -4,6 +4,7 @@ from ..consultas import get_sparq_class, get_prefix
 from ..config_loader import load_config
 from urllib.parse import urlencode
 from app.fuseki_utils import resolve_fuseki_endpoint
+from .auth import token_required
 
 classapi_app = Blueprint('classapi_app', __name__)
 
@@ -65,6 +66,7 @@ def list():
 
 
 @classapi_app.route('/adicionar_classe', methods=['POST'])
+@token_required
 def adicionar_classe():
     try:
         data = request.get_json()
@@ -132,6 +134,7 @@ def adicionar_classe():
         return jsonify({"error": "Exception", "message": str(e)}), 500
 
 @classapi_app.route('/alterar_classe', methods=['POST'])
+@token_required
 def alterar_classe():
     try:
         data = request.get_json()
@@ -204,6 +207,7 @@ def alterar_classe():
 
 
 @classapi_app.route('/excluir_classe', methods=['DELETE','POST'])
+@token_required
 def excluir_classe():
     try:
         data = request.get_json()

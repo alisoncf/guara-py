@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify, current_app, send_from_directory
 import os, uuid, shutil, hashlib
 from werkzeug.utils import secure_filename
 from  ..blueprints.objectapi import add_relation
+from .auth import token_required
 
 import requests
 uploadapp = Blueprint('uploadapi', __name__)
@@ -36,6 +37,7 @@ def get_midia(objeto_id, filename):
     return send_from_directory(objeto_folder, safe_filename)
 
 @uploadapp.route('/upload', methods=['POST'])
+@token_required
 def upload():
     # Obtém o ID do objeto a partir do formulário
     objeto_id = request.form.get('objetoId')
@@ -136,6 +138,7 @@ def upload():
         'message': 'Mídias adicionadas!'
     }), 200
 @uploadapp.route('/remove', methods=['POST'])
+@token_required
 def remove_file():
     # Obtém o ID do objeto a partir do formulário
     data = request.get_json()

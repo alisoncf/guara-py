@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify
 import requests
 
 from app.config_loader import load_config
+from app.blueprints.auth import token_required
 
 sparqapi_app = Blueprint('sparqapi_app', __name__)
 
@@ -31,6 +32,7 @@ def execute_query(query):
         return {"error": response.status_code, "message": response.text}
 
 @sparqapi_app.route('/query', methods=['GET'])
+@token_required
 def sparql_query():
     query = request.args.get('query')
     if not query:
@@ -39,6 +41,7 @@ def sparql_query():
     return jsonify(result)
 
 @sparqapi_app.route('/update', methods=['POST'])
+@token_required
 def sparql_update():
     query = request.data.decode('utf-8')
     if not query:

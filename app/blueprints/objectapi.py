@@ -403,7 +403,7 @@ def update():
     
 
 @objectapi_app.route('/adicionar_relacao', methods=['POST'])
-
+@token_required
 def adicionar_relacao():
     try:
         data = request.get_json()
