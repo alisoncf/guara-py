@@ -116,7 +116,7 @@ def upload():
                                          repositorio_uri=repositorio_uri,
                                          repository=repository,
                                          )
-                print('#resultado',resultado)
+                #print('#resultado',resultado)
                 
     if len(links)>0:
         for file in arquivos:

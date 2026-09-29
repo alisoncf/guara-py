@@ -3,3 +3,4 @@ venv-kraken/
 fuseki/
 .env
 docker-compose.override.yml
+uploads/

@@ -11,7 +11,11 @@ services:
       - "5000:5000"
     volumes:
       - .:/app
-      - ./uploads:/app/uploads
+      # UPLOAD_FOLDER (app/blueprints/config/base.py e app/__init__.py) é
+      # /var/www/imagens - esse volume precisa apontar pro MESMO caminho
+      # usado ali, senão todo upload vira efêmero e some no próximo
+      # `docker compose up -d` (todo deploy recria o container).
+      - ./uploads:/var/www/imagens
     env_file:
       - .env
     environment:
